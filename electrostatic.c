@@ -154,7 +154,6 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 		for (int NowCharge = 0; NowCharge < Particle; NowCharge++) {
 			double NewPosition_Y = 0, NewPosition_X = 0;
-			double GridForce_Y = 0, GridForce_X = 0;
 
 			// Attraction(by using bilinear interpolation)
 			if (Particle_Y[NowCharge] - (int)Particle_Y[NowCharge] == 0 && Particle_X[NowCharge] - (int)Particle_X[NowCharge] == 0) {
@@ -188,39 +187,35 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 				}
 			}
 
-			// Add GridForce to find discrete particle locations
-			double real_y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
-			double real_x = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
-			if (real_y == 0 && real_x == 0) {
-				GridForce_Y = 0;
-				GridForce_X = 0;
-			} else {
-				if (real_y < 0.5) {
-					real_y = -real_y;
-				} else {
-					real_y = 1 - real_y;
-				}
-				if (real_x < 0.5) {
-					real_x = -real_x;
-				} else {
-					real_x = 1 - real_x;
-				}
-				double vector3 = sqrt(real_y * real_y + real_x * real_x);
-				if (real_y != 0) {
-					GridForce_Y = 3.5 * real_y / (vector3 * (1 + pow(vector3, 8) * 10000));
-				}
-				if (real_x != 0) {
-					GridForce_X = 3.5 * real_x / (vector3 * (1 + pow(vector3, 8) * 10000));
-				}
-			}
-
 			// result (new position of particles)
+			Particle_Y[NowCharge] += 0.1 * NewPosition_Y;
+			Particle_X[NowCharge] += 0.1 * NewPosition_X;
 			if (GridForce) {
-				Particle_Y[NowCharge] = Particle_Y[NowCharge] + 0.1 * (NewPosition_Y + GridForce_Y);
-				Particle_X[NowCharge] = Particle_X[NowCharge] + 0.1 * (NewPosition_X + GridForce_X);
-			} else {
-				Particle_Y[NowCharge] = Particle_Y[NowCharge] + 0.1 * NewPosition_Y;
-				Particle_X[NowCharge] = Particle_X[NowCharge] + 0.1 * NewPosition_X;
+				// Add GridForce to find discrete particle locations
+				double real_y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
+				double real_x = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
+				if (real_y != 0 || real_x != 0) {
+					if (real_y < 0.5) {
+						real_y = -real_y;
+					} else {
+						real_y = 1 - real_y;
+					}
+					if (real_x < 0.5) {
+						real_x = -real_x;
+					} else {
+						real_x = 1 - real_x;
+					}
+					double vector3 = sqrt(real_y * real_y + real_x * real_x);
+					double t = 0.35 / (vector3 + pow(vector3, 9) * 10000);
+					if (real_y != 0) {
+						// GridForce_Y = 3.5 * real_y / (vector3 * (1 + pow(vector3, 8) * 10000));
+						Particle_Y[NowCharge] += real_y * t;
+					}
+					if (real_x != 0) {
+						// GridForce_X = 3.5 * real_x / (vector3 * (1 + pow(vector3, 8) * 10000));
+						Particle_X[NowCharge] += real_x * t;
+					}
+				}
 			}
 
 			// Shake
