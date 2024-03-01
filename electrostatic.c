@@ -126,13 +126,21 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		for (int j = 0; j < src.cols; j++) {
 			forcefield_y[i][j] = 0;
 			forcefield_x[i][j] = 0;
+			int a = -i;
 			for (int y = 0; y < src.rows; y++) {
+				int aa = a * a;
+				int b = -j;
 				for (int x = 0; x < src.cols; x++) {
 					if (!(i == y && j == x)) {
-						forcefield_y[i][j] += (1 - image_in[y][x]) * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
-						forcefield_x[i][j] += (1 - image_in[y][x]) * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
+						double t = (1 - image_in[y][x]) / (aa + b * b);
+						// forcefield_y[i][j] += (1 - image_in[y][x]) * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
+						// forcefield_x[i][j] += (1 - image_in[y][x]) * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
+						forcefield_y[i][j] += a * t;
+						forcefield_x[i][j] += b * t;
 					}
+					b++;
 				}
+				a++;
 			}
 		}
 	}
