@@ -154,9 +154,11 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 		for (int NowCharge = 0; NowCharge < Particle; NowCharge++) {
 			double NewPosition_Y = 0, NewPosition_X = 0;
+			double real_y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
+			double real_x = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
 
 			// Attraction(by using bilinear interpolation)
-			if (Particle_Y[NowCharge] - (int)Particle_Y[NowCharge] == 0 && Particle_X[NowCharge] - (int)Particle_X[NowCharge] == 0) {
+			if (real_y == 0 && real_x == 0) {
 				NewPosition_Y = forcefield_y[(int)Particle_Y[NowCharge]][(int)Particle_X[NowCharge]];
 				NewPosition_X = forcefield_x[(int)Particle_Y[NowCharge]][(int)Particle_X[NowCharge]];
 			} else {
@@ -192,8 +194,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			Particle_X[NowCharge] += 0.1 * NewPosition_X;
 			if (GridForce) {
 				// Add GridForce to find discrete particle locations
-				double real_y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
-				double real_x = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
+				// double real_y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
+				// double real_x = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
 				if (real_y != 0 || real_x != 0) {
 					if (real_y < 0.5) {
 						real_y = -real_y;
