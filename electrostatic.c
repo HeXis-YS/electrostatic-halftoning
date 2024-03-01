@@ -43,11 +43,9 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 	char out_file[50];
 	double **image_in = (double **)malloc(sizeof(double *) * src.rows);
-	for (int i = 0; i < src.rows; i++) {
-		image_in[i] = (double *)malloc(sizeof(double) * src.cols);
-	}
 	unsigned char **image_tmp = (unsigned char **)malloc(sizeof(unsigned char *) * src.rows);
 	for (int i = 0; i < src.rows; i++) {
+		image_in[i] = (double *)malloc(sizeof(double) * src.cols);
 		image_tmp[i] = (unsigned char *)malloc(sizeof(unsigned char) * src.cols);
 	}
 	dst->rows = src.rows;
@@ -82,29 +80,22 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	while (Particle > 0) {
 		int RandY = rand() % src.rows;
 		int RandX = rand() % src.cols;
-		if (image_tmp[RandY][RandX] != 0) {
-			if (InitialCharge == 1) {
-				int RandNumber = rand() % 256;
-				if (RandNumber > src.data[RandY * src.cols + RandX]) {
-					image_tmp[RandY][RandX] = 0;
-					if (Debug == 1) {
-						dst->data[RandY * src.cols + RandX] = 0;
-					}
-					Particle--;
-				}
-			} else if (InitialCharge == 0) {
-				image_tmp[RandY][RandX] = 0;
-				if (Debug == 1) {
-					dst->data[RandY * src.cols + RandX] = 0;
-				}
-				Particle--;
-			}
+		if (image_tmp[RandY][RandX] == 0) {
+			continue;
 		}
+		// int RandNumber = rand() % 256;
+		if (InitialCharge && rand() % 256 <= src.data[RandY * src.cols + RandX]) {
+			continue;
+		}
+		image_tmp[RandY][RandX] = 0;
+		if (Debug == 1) {
+			dst->data[RandY * src.cols + RandX] = 0;
+		}
+		Particle--;
 	}
 	if (Debug == 1) {
 		cv_imwrite("output.bmp", *dst);
 	} else if (Debug == 2) {
-		// fprintf(out_file, ".\\output\\0.bmp");
 		sprintf(out_file, ".\\output\\0.bmp");
 		cv_imwrite(out_file, *dst);
 	}
@@ -126,11 +117,9 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	///// Create Forcefield Table
 	printf("Create Forcefield Table, \n");
 	double **forcefield_y = (double **)malloc(sizeof(double *) * src.rows);
-	for (int i = 0; i < src.rows; i++) {
-		forcefield_y[i] = (double *)malloc(sizeof(double *) * src.cols);
-	}
 	double **forcefield_x = (double **)malloc(sizeof(double *) * src.rows);
 	for (int i = 0; i < src.rows; i++) {
+		forcefield_y[i] = (double *)malloc(sizeof(double *) * src.cols);
 		forcefield_x[i] = (double *)malloc(sizeof(double *) * src.cols);
 	}
 	for (int i = 0; i < src.rows; i++) {
@@ -194,42 +183,31 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 				GridForce_X = 0;
 			} else {
 				if (real_y < 0.5) {
-					if (real_x < 0.5) {
-						real_y = (0 - real_y);
-						real_x = (0 - real_x);
-					} else {
-						real_y = (0 - real_y);
-						real_x = (1 - real_x);
-					}
+					real_y = -real_y;
 				} else {
-					if (real_x < 0.5) {
-						real_y = (1 - real_y);
-						real_x = (0 - real_x);
-					} else {
-						real_y = (1 - real_y);
-						real_x = (1 - real_x);
-					}
+					real_y = 1 - real_y;
+				}
+				if (real_x < 0.5) {
+					real_x = -real_x;
+				} else {
+					real_x = 1 - real_x;
 				}
 				double vector3 = sqrt(real_y * real_y + real_x * real_x);
-				if (real_y == 0) {
-					GridForce_Y = 0;
-				} else {
+				if (real_y != 0) {
 					GridForce_Y = 3.5 * real_y / (vector3 * (1 + pow(vector3, 8) * 10000));
 				}
-				if (real_x == 0) {
-					GridForce_X = 0;
-				} else {
+				if (real_x != 0) {
 					GridForce_X = 3.5 * real_x / (vector3 * (1 + pow(vector3, 8) * 10000));
 				}
 			}
 
-			// resault (new position of particles)
-			if (GridForce == 0) {
-				Particle_Y[NowCharge] = Particle_Y[NowCharge] + 0.1 * NewPosition_Y;
-				Particle_X[NowCharge] = Particle_X[NowCharge] + 0.1 * NewPosition_X;
-			} else if (GridForce == 1) {
+			// result (new position of particles)
+			if (GridForce) {
 				Particle_Y[NowCharge] = Particle_Y[NowCharge] + 0.1 * (NewPosition_Y + GridForce_Y);
 				Particle_X[NowCharge] = Particle_X[NowCharge] + 0.1 * (NewPosition_X + GridForce_X);
+			} else {
+				Particle_Y[NowCharge] = Particle_Y[NowCharge] + 0.1 * NewPosition_Y;
+				Particle_X[NowCharge] = Particle_X[NowCharge] + 0.1 * NewPosition_X;
 			}
 
 			// Shake
@@ -240,14 +218,12 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 			if (Particle_Y[NowCharge] < 0) {
 				Particle_Y[NowCharge] = 0;
-			}
-			if (Particle_Y[NowCharge] >= src.rows) {
+			} else if (Particle_Y[NowCharge] >= src.rows) {
 				Particle_Y[NowCharge] = src.rows - 1;
 			}
 			if (Particle_X[NowCharge] < 0) {
 				Particle_X[NowCharge] = 0;
-			}
-			if (Particle_X[NowCharge] >= src.cols) {
+			} else if (Particle_X[NowCharge] >= src.cols) {
 				Particle_X[NowCharge] = src.cols - 1;
 			}
 		}
