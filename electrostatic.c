@@ -219,9 +219,10 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			}
 
 			// Shake
-			if (Shake == 1 && iterations % 10 == 0 && Iterations > 64) {
-				Particle_Y[NowCharge] += (log10((double)Iterations) / log10(2.0) - 6) * exp(iterations / 1000.0) / 10;
-				Particle_X[NowCharge] += (log10((double)Iterations) / log10(2.0) - 6) * exp(iterations / 1000.0) / 10;
+			if (Shake && iterations % 10 == 0 && Iterations > 64) {
+				double t = (log10((double)Iterations) / log10(2.0) - 6) * exp(iterations / 1000.0) / 10;
+				Particle_Y[NowCharge] += t;
+				Particle_X[NowCharge] += t;
 			}
 
 			if (Particle_Y[NowCharge] < 0) {
