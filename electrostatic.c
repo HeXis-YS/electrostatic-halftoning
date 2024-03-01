@@ -308,17 +308,13 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialization
+	///// Find the number of Particle
+	double CountParticle = 0;
 	for (int p = 0; p < pixel_count; p++) {
 		image_in_inverse[p] = Pixel_LUT[src.data[p]];
 		image_tmp[p] = 255;
 		dst->data[p] = 255;
-	}
-
-	//////////////////////////////////////////////////////////////////////////
-	///// Find the number of Particle
-	double CountParticle = 0;
-	for (int p = 0; p < pixel_count; p++) {
-		CountParticle = CountParticle + image_in_inverse[p];
+		CountParticle += image_in_inverse[p];
 	}
 	printf("The number of black pixel(charge) = %d\n", (int)CountParticle);
 
