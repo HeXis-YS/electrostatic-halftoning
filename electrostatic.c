@@ -180,9 +180,10 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 				if (NowCharge != OtherCharge) {
 					instead_y = Particle_Y[OtherCharge] - Particle_Y[NowCharge];
 					instead_x = Particle_X[OtherCharge] - Particle_X[NowCharge];
-					if (!(instead_y == 0 && instead_x == 0)) {
-						NewPosition_Y -= instead_y / (instead_y * instead_y + instead_x * instead_x);
-						NewPosition_X -= instead_x / (instead_y * instead_y + instead_x * instead_x);
+					if (instead_y != 0 || instead_x != 0) {
+						double t = instead_y * instead_y + instead_x * instead_x;
+						NewPosition_Y -= instead_y / t;
+						NewPosition_X -= instead_x / t;
 					}
 				}
 			}
