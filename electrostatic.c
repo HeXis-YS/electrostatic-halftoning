@@ -157,9 +157,13 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 				int Bilinear_x1 = Particle_X[NowCharge];
 				int Bilinear_y2 = Bilinear_y1 + 1;
 				int Bilinear_x2 = Bilinear_x1 + 1;
-				if (Bilinear_y1 + 1 < src.rows && Bilinear_x1 + 1 < src.cols) {
-					NewPosition_Y = forcefield_y[Bilinear_y1][Bilinear_x1] * ((double)Bilinear_x2 - Particle_X[NowCharge]) * ((double)Bilinear_y2 - Particle_Y[NowCharge]) + forcefield_y[Bilinear_y1][Bilinear_x2] * (Particle_X[NowCharge] - (double)Bilinear_x1) * ((double)Bilinear_y2 - Particle_Y[NowCharge]) + forcefield_y[Bilinear_y2][Bilinear_x1] * ((double)Bilinear_x2 - Particle_X[NowCharge]) * (Particle_Y[NowCharge] - (double)Bilinear_y1) + forcefield_y[Bilinear_y2][Bilinear_x2] * (Particle_X[NowCharge] - (double)Bilinear_x1) * (Particle_Y[NowCharge] - (double)Bilinear_y1);
-					NewPosition_X = forcefield_x[Bilinear_y1][Bilinear_x1] * ((double)Bilinear_x2 - Particle_X[NowCharge]) * ((double)Bilinear_y2 - Particle_Y[NowCharge]) + forcefield_x[Bilinear_y1][Bilinear_x2] * (Particle_X[NowCharge] - (double)Bilinear_x1) * ((double)Bilinear_y2 - Particle_Y[NowCharge]) + forcefield_x[Bilinear_y2][Bilinear_x1] * ((double)Bilinear_x2 - Particle_X[NowCharge]) * (Particle_Y[NowCharge] - (double)Bilinear_y1) + forcefield_x[Bilinear_y2][Bilinear_x2] * (Particle_X[NowCharge] - (double)Bilinear_x1) * (Particle_Y[NowCharge] - (double)Bilinear_y1);
+				if (Bilinear_y2 < src.rows && Bilinear_x2 < src.cols) {
+					double a = (double)Bilinear_x2 - Particle_X[NowCharge];
+					double b = (double)Bilinear_y2 - Particle_Y[NowCharge];
+					double c = Particle_X[NowCharge] - (double)Bilinear_x1;
+					double d = Particle_Y[NowCharge] - (double)Bilinear_y1;
+					NewPosition_Y = forcefield_y[Bilinear_y1][Bilinear_x1] * a * b + forcefield_y[Bilinear_y1][Bilinear_x2] * c * b + forcefield_y[Bilinear_y2][Bilinear_x1] * a * d + forcefield_y[Bilinear_y2][Bilinear_x2] * c * d;
+					NewPosition_X = forcefield_x[Bilinear_y1][Bilinear_x1] * a * b + forcefield_x[Bilinear_y1][Bilinear_x2] * c * b + forcefield_x[Bilinear_y2][Bilinear_x1] * a * d + forcefield_x[Bilinear_y2][Bilinear_x2] * c * d;
 				}
 			}
 
