@@ -322,38 +322,38 @@ DWORD WINAPI forcefield_thread(struct ES *thread_data) {
 	}
 }
 
-int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCharge, int Iterations, int GridForce, int Shake, int Debug) {
+int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_initial_charge, int max_iterations, int enable_gridforce, int enable_shake, int enable_debug) {
 	//////////////////////////////////////////////////////////////////////////
 	///// exceptions
 	// if(src.type()!=CV_8U){
 	// 	CV_Error(CV_BadNumChannels,"[pixkit::halftoning::ElectrostaticHalftoning] image should be grayscale");
 	// }
-	if (InitialCharge != 0 && InitialCharge != 1) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] InitialCharge should be 0 or 1");
+	if (enable_initial_charge != 0 && enable_initial_charge != 1) {
+		printf("[pixkit::halftoning::ElectrostaticHalftoning] enable_initial_charge should be 0 or 1");
 		system("pause");
 		exit(0);
 	}
-	if (Iterations < 1) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] Iterations should be bigger than 1");
+	if (max_iterations < 1) {
+		printf("[pixkit::halftoning::ElectrostaticHalftoning] max_iterations should be bigger than 1");
 		system("pause");
 		exit(0);
 	}
-	if (GridForce != 0 && GridForce != 1) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] GridForce should be 0 or 1");
+	if (enable_gridforce != 0 && enable_gridforce != 1) {
+		printf("[pixkit::halftoning::ElectrostaticHalftoning] enable_gridforce should be 0 or 1");
 		system("pause");
 		exit(0);
 	}
-	if (Shake != 0 && Shake != 1) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] Shake should be 0 or 1");
+	if (enable_shake != 0 && enable_shake != 1) {
+		printf("[pixkit::halftoning::ElectrostaticHalftoning] enable_shake should be 0 or 1");
 		system("pause");
 		exit(0);
 	}
-	if (Shake == 1 && Iterations <= 64) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] Iterations should be bigger than 64");
+	if (enable_shake == 1 && max_iterations <= 64) {
+		printf("[pixkit::halftoning::ElectrostaticHalftoning] max_iterations should be bigger than 64");
 		system("pause");
 		exit(0);
 	}
-	if (Debug != 0 && Debug != 1) {
+	if (enable_debug != 0 && enable_debug != 1) {
 		printf("[pixkit::halftoning::ElectrostaticHalftoning] Debug should be 0 or 1");
 		system("pause");
 		exit(0);
@@ -363,15 +363,14 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	const int color = 3 - 1;
 	unsigned char *particle_lut = (unsigned char *)malloc(sizeof(unsigned char) * (color + 1));
 	char out_file[50];
-	int pixel_count = src.cols * src.rows;
-	es.pixel_count = pixel_count;
-	double *image_in_inverse = (double *)malloc(sizeof(double) * pixel_count);
-	es.image_in_inverse = image_in_inverse;
-	// unsigned char *image_tmp = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
-	int *image_particle = (int *)malloc(sizeof(int) * pixel_count);
+	es.pixel_count = src.cols * src.rows;
+	es.image_in_inverse = (double *)malloc(sizeof(double) * es.pixel_count);
+	;
+	// unsigned char *image_tmp = (unsigned char *)malloc(sizeof(unsigned char) * es.pixel_count);
+	int *image_particle = (int *)malloc(sizeof(int) * es.pixel_count);
 	dst->cols = src.cols;
 	dst->rows = src.rows;
-	dst->data = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
+	dst->data = (unsigned char *)malloc(sizeof(unsigned char) * es.pixel_count);
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialization
@@ -379,38 +378,38 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	for (int i = 0; i <= color; i++) {
 		particle_lut[i] = (double)i * 255 / color + 0.5;
 	}
-	int CountParticle = pixel_count * 255;
+	int particle_count = es.pixel_count * 255;
 	// memset(image_tmp, 255, sizeof(unsigned char) * pixel_count);
-	memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
-	for (int p = 0; p < pixel_count; p++) {
-		image_in_inverse[p] = Pixel_LUT[src.data[p]];
-		// CountParticle += image_in_inverse[p];
-		CountParticle -= src.data[p];
+	memset(dst->data, 255, sizeof(unsigned char) * es.pixel_count);
+	for (int p = 0; p < es.pixel_count; p++) {
+		es.image_in_inverse[p] = Pixel_LUT[src.data[p]];
+		// particle_count += image_in_inverse[p];
+		particle_count -= src.data[p];
 		image_particle[p] = color;
 	}
-	CountParticle = CountParticle * color / 255;
-	printf("The number of black pixel(charge) = %d\n", (int)CountParticle);
+	particle_count = particle_count * color / 255;
+	printf("The number of black pixel(charge) = %d\n", (int)particle_count);
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialize the Particle's position
-	double *Particle_Y = (double *)malloc(sizeof(double) * (int)CountParticle);
-	double *Particle_X = (double *)malloc(sizeof(double) * (int)CountParticle);
-	for (int i = CountParticle; i > 0;) {
-		int RandY = rand() % src.rows;
-		int RandX = rand() % src.cols;
-		int p = RandY * src.cols + RandX;
+	double *particles_y = (double *)malloc(sizeof(double) * (int)particle_count);
+	double *particles_x = (double *)malloc(sizeof(double) * (int)particle_count);
+	for (int i = particle_count; i > 0;) {
+		// int RandY = rand() % src.rows;
+		// int RandX = rand() % src.cols;
+		int p = (rand() % src.rows) * src.cols + (rand() % src.cols);
 		if (image_particle[p] <= 0) {
 			continue;
 		}
 		// int RandNumber = rand() % 256;
-		if (InitialCharge && rand() % 256 <= src.data[p]) {
+		if (enable_initial_charge && rand() % 256 <= src.data[p]) {
 			continue;
 		}
 		image_particle[p]--;
 		i--;
 	}
-	if (Debug) {
-		for (int p = 0; p < pixel_count; p++) {
+	if (enable_debug) {
+		for (int p = 0; p < es.pixel_count; p++) {
 			dst->data[p] = particle_lut[image_particle[p]];
 		}
 		sprintf(out_file, ".\\output\\0.bmp");
@@ -419,13 +418,12 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Record the Particle's position
-	int ParticleNumber = 0;
-	for (int i = 0, p = 0; i < src.rows; i++) {
+	for (int i = 0, p = 0, particle = 0; i < src.rows; i++) {
 		for (int j = 0; j < src.cols; j++) {
 			for (int k = image_particle[p]; k < color; k++) {
-				Particle_Y[ParticleNumber] = (double)i;
-				Particle_X[ParticleNumber] = (double)j;
-				ParticleNumber++;
+				particles_y[particle] = (double)i;
+				particles_x[particle] = (double)j;
+				particle++;
 			}
 			p++;
 		}
@@ -434,8 +432,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	//////////////////////////////////////////////////////////////////////////
 	///// Create Forcefield Table
 	printf("Create Forcefield Table, \n");
-	double *forcefield_y = (double *)malloc(sizeof(double) * pixel_count);
-	double *forcefield_x = (double *)malloc(sizeof(double) * pixel_count);
+	double *forcefield_y = (double *)malloc(sizeof(double) * es.pixel_count);
+	double *forcefield_x = (double *)malloc(sizeof(double) * es.pixel_count);
 	es.forcefield_y = forcefield_y;
 	es.forcefield_x = forcefield_x;
 	es.tmp = 0;
@@ -453,58 +451,59 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	//////////////////////////////////////////////////////////////////////////
 	///// process
 	double instead_y, instead_x;
-	for (int iterations = 1; iterations <= Iterations; iterations++) {
-		printf("Iterations %d\n", iterations);
+	for (int iteration = 1; iteration <= max_iterations; iteration++) {
+		printf("Iterations %d\n", iteration);
 
-		for (int NowCharge = 0; NowCharge < CountParticle; NowCharge++) {
-			double NewPosition_Y = 0, NewPosition_X = 0;
-			double real_y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
-			double real_x = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
+		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
+			double newpos_y = 0;
+			double newpos_x = 0;
+			double real_y = particles_y[current_particle] - (int)particles_y[current_particle];
+			double real_x = particles_x[current_particle] - (int)particles_x[current_particle];
 
 			// Attraction(by using bilinear interpolation)
 			if (real_y == 0 && real_x == 0) {
-				int p = (int)Particle_Y[NowCharge] * src.cols + (int)Particle_X[NowCharge];
-				NewPosition_Y = forcefield_y[p];
-				NewPosition_X = forcefield_x[p];
+				int p = (int)particles_y[current_particle] * src.cols + (int)particles_x[current_particle];
+				newpos_y = forcefield_y[p];
+				newpos_x = forcefield_x[p];
 			} else {
-				int Bilinear_y1 = Particle_Y[NowCharge];
-				int Bilinear_x1 = Particle_X[NowCharge];
-				int Bilinear_y2 = Bilinear_y1 + 1;
-				int Bilinear_x2 = Bilinear_x1 + 1;
-				if (Bilinear_y2 < src.rows && Bilinear_x2 < src.cols) {
-					double a = (double)Bilinear_x2 - Particle_X[NowCharge];
-					double b = (double)Bilinear_y2 - Particle_Y[NowCharge];
-					double c = Particle_X[NowCharge] - (double)Bilinear_x1;
-					double d = Particle_Y[NowCharge] - (double)Bilinear_y1;
-					int p11 = Bilinear_y1 * src.cols + Bilinear_x1;
-					int p12 = Bilinear_y1 * src.cols + Bilinear_x2;
-					int p21 = Bilinear_y2 * src.cols + Bilinear_x1;
-					int p22 = Bilinear_y2 * src.cols + Bilinear_x2;
-					NewPosition_Y = forcefield_y[p11] * a * b + forcefield_y[p12] * c * b + forcefield_y[p21] * a * d + forcefield_y[p22] * c * d;
-					NewPosition_X = forcefield_x[p11] * a * b + forcefield_x[p12] * c * b + forcefield_x[p21] * a * d + forcefield_x[p22] * c * d;
+				int bilinear_y1 = particles_y[current_particle];
+				int bilinear_x1 = particles_x[current_particle];
+				int bilinear_y2 = bilinear_y1 + 1;
+				int bilinear_x2 = bilinear_x1 + 1;
+				if (bilinear_y2 < src.rows && bilinear_x2 < src.cols) {
+					double a = (double)bilinear_x2 - particles_x[current_particle];
+					double b = (double)bilinear_y2 - particles_y[current_particle];
+					double c = particles_x[current_particle] - (double)bilinear_x1;
+					double d = particles_y[current_particle] - (double)bilinear_y1;
+					int p11 = bilinear_y1 * src.cols + bilinear_x1;
+					int p12 = bilinear_y1 * src.cols + bilinear_x2;
+					int p21 = bilinear_y2 * src.cols + bilinear_x1;
+					int p22 = bilinear_y2 * src.cols + bilinear_x2;
+					newpos_y = forcefield_y[p11] * a * b + forcefield_y[p12] * c * b + forcefield_y[p21] * a * d + forcefield_y[p22] * c * d;
+					newpos_x = forcefield_x[p11] * a * b + forcefield_x[p12] * c * b + forcefield_x[p21] * a * d + forcefield_x[p22] * c * d;
 				}
 			}
 
 			// Repulsion
-			for (int OtherCharge = 0; OtherCharge < CountParticle; OtherCharge++) {
-				if (NowCharge != OtherCharge) {
-					instead_y = Particle_Y[OtherCharge] - Particle_Y[NowCharge];
-					instead_x = Particle_X[OtherCharge] - Particle_X[NowCharge];
+			for (int other_particle = 0; other_particle < particle_count; other_particle++) {
+				if (current_particle != other_particle) {
+					instead_y = particles_y[other_particle] - particles_y[current_particle];
+					instead_x = particles_x[other_particle] - particles_x[current_particle];
 					if (instead_y != 0 || instead_x != 0) {
 						double t = color * (instead_y * instead_y + instead_x * instead_x);
-						NewPosition_Y -= instead_y / t;
-						NewPosition_X -= instead_x / t;
+						newpos_y -= instead_y / t;
+						newpos_x -= instead_x / t;
 					}
 				}
 			}
 
 			// result (new position of particles)
-			Particle_Y[NowCharge] += 0.1 * NewPosition_Y;
-			Particle_X[NowCharge] += 0.1 * NewPosition_X;
-			if (GridForce) {
+			particles_y[current_particle] += 0.1 * newpos_y;
+			particles_x[current_particle] += 0.1 * newpos_x;
+			if (enable_gridforce) {
 				// Add GridForce to find discrete particle locations
-				// double real_y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
-				// double real_x = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
+				// double real_y = particles_y[current_particle] - (int)particles_y[current_particle];
+				// double real_x = particles_x[current_particle] - (int)particles_x[current_particle];
 				if (real_y != 0 || real_x != 0) {
 					if (real_y < 0.5) {
 						real_y = -real_y;
@@ -520,44 +519,43 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 					double t = 0.35 / (vector3 + pow(vector3, 9) * 10000);
 					if (real_y != 0) {
 						// GridForce_Y = 3.5 * real_y / (vector3 * (1 + pow(vector3, 8) * 10000));
-						Particle_Y[NowCharge] += real_y * t;
+						particles_y[current_particle] += real_y * t;
 					}
 					if (real_x != 0) {
 						// GridForce_X = 3.5 * real_x / (vector3 * (1 + pow(vector3, 8) * 10000));
-						Particle_X[NowCharge] += real_x * t;
+						particles_x[current_particle] += real_x * t;
 					}
 				}
 			}
 
 			// Shake
-			if (Shake && iterations % 10 == 0 && Iterations > 64) {
-				double t = (log10((double)Iterations) / log10(2.0) - 6) * exp(iterations / 1000.0) / 10;
-				Particle_Y[NowCharge] += t;
-				Particle_X[NowCharge] += t;
+			if (enable_shake && iteration % 10 == 0 && max_iterations > 64) {
+				double t = (log10((double)max_iterations) / log10(2.0) - 6) * exp(iteration / 1000.0) / 10;
+				particles_y[current_particle] += t;
+				particles_x[current_particle] += t;
 			}
 
-			if (Particle_Y[NowCharge] < 0) {
-				Particle_Y[NowCharge] = 0;
-			} else if (Particle_Y[NowCharge] >= src.rows) {
-				Particle_Y[NowCharge] = src.rows - 1;
+			if (particles_y[current_particle] < 0) {
+				particles_y[current_particle] = 0;
+			} else if (particles_y[current_particle] >= src.rows) {
+				particles_y[current_particle] = src.rows - 1;
 			}
-			if (Particle_X[NowCharge] < 0) {
-				Particle_X[NowCharge] = 0;
-			} else if (Particle_X[NowCharge] >= src.cols) {
-				Particle_X[NowCharge] = src.cols - 1;
+			if (particles_x[current_particle] < 0) {
+				particles_x[current_particle] = 0;
+			} else if (particles_x[current_particle] >= src.cols) {
+				particles_x[current_particle] = src.cols - 1;
 			}
 		}
 
 		// Output
-		for (int p = 0; p < pixel_count; p++) {
+		for (int p = 0; p < es.pixel_count; p++) {
 			dst->data[p] = 255;
 			image_particle[p] = color;
 		}
 		int out_Y, out_X;
-		double count_errorY = 0, count_errorX = 0;
-		for (int NowCharge = 0; NowCharge < CountParticle; NowCharge++) {
-			out_Y = Particle_Y[NowCharge] + 0.5;
-			out_X = Particle_X[NowCharge] + 0.5;
+		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
+			out_Y = particles_y[current_particle] + 0.5;
+			out_X = particles_x[current_particle] + 0.5;
 			if (out_Y >= src.rows) {
 				out_Y = src.rows - 1;
 			}
@@ -567,22 +565,22 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			image_particle[out_Y * src.cols + out_X]--;
 		}
 
-		for (int p = 0; p < pixel_count; p++) {
+		for (int p = 0; p < es.pixel_count; p++) {
 			if (image_particle[p] < 0) {
 				image_particle[p] = 0;
 			}
 			dst->data[p] = particle_lut[image_particle[p]];
 		}
 
-		if (Debug) {
-			sprintf(out_file, ".\\output\\%d.bmp", iterations);
+		if (enable_debug) {
+			sprintf(out_file, ".\\output\\%d.bmp", iteration);
 			cv_imwrite(out_file, *dst);
 		}
 	}
 
 	// dst = dst->clone();
 
-	free(image_in_inverse);
+	free(es.image_in_inverse);
 	// free(image_tmp);
 
 	return 1;
