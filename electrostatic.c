@@ -301,6 +301,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	}
 
 	const int color = 3 - 1;
+	unsigned char *particle_lut = (unsigned char *)malloc(sizeof(unsigned char) * (color + 1));
 	char out_file[50];
 	int pixel_count = src.cols * src.rows;
 	double *image_in_inverse = (double *)malloc(sizeof(double) * pixel_count);
@@ -313,15 +314,19 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialization
 	///// Find the number of Particle
-	double CountParticle = 0;
+	for (int i = 0; i <= color; i++) {
+		particle_lut[i] = (double)i * 255 / color + 0.5;
+	}
+	int CountParticle = pixel_count * 255;
 	// memset(image_tmp, 255, sizeof(unsigned char) * pixel_count);
 	memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
 	for (int p = 0; p < pixel_count; p++) {
 		image_in_inverse[p] = Pixel_LUT[src.data[p]];
-		CountParticle += image_in_inverse[p];
+		// CountParticle += image_in_inverse[p];
+		CountParticle -= src.data[p];
 		image_particle[p] = color;
 	}
-	CountParticle *= color;
+	CountParticle = CountParticle * color / 255;
 	printf("The number of black pixel(charge) = %d\n", (int)CountParticle);
 
 	//////////////////////////////////////////////////////////////////////////
@@ -333,7 +338,6 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		int RandY = rand() % src.rows;
 		int RandX = rand() % src.cols;
 		int p = RandY * src.cols + RandX;
-		// if (image_tmp[p] == 0) {
 		if (image_particle <= 0) {
 			continue;
 		}
@@ -341,7 +345,6 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		if (InitialCharge && rand() % 256 <= src.data[p]) {
 			continue;
 		}
-		// image_tmp[p] = 0;
 		image_particle[p]--;
 		if (Debug == 1) {
 			dst->data[p] = 0;
@@ -360,7 +363,6 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	int ParticleNumber = 0;
 	for (int i = 0, p = 0; i < src.rows; i++) {
 		for (int j = 0; j < src.cols; j++) {
-			// if (image_tmp[p] == 0) {
 			for (int k = image_particle[p]; k < color; k++) {
 				Particle_Y[ParticleNumber] = (double)i;
 				Particle_X[ParticleNumber] = (double)j;
@@ -502,10 +504,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		// Output
 		for (int p = 0; p < pixel_count; p++) {
 			dst->data[p] = 255;
-			// image_tmp[p] = 255;
 			image_particle[p] = color;
 		}
-		int output_position;
 		int out_Y, out_X;
 		double count_errorY = 0, count_errorX = 0;
 		for (int NowCharge = 0; NowCharge < Particle; NowCharge++) {
@@ -517,16 +517,14 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			if (out_X >= src.cols) {
 				out_X = src.cols - 1;
 			}
-			// image_tmp[out_Y * src.cols + out_X] = 0;
 			image_particle[out_Y * src.cols + out_X]--;
 		}
 
 		for (int p = 0; p < pixel_count; p++) {
-			// dst->data[p] = image_tmp[p];
 			if (image_particle[p] < 0) {
 				image_particle[p] = 0;
 			}
-			dst->data[p] = image_particle[p] * 255 / color;
+			dst->data[p] = particle_lut[image_particle[p]];
 		}
 
 		if (Debug == 1) {
