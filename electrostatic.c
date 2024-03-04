@@ -11,7 +11,9 @@
 struct ES {
 	int tmp;
 	int pixel_count;
-	struct CMat src;
+	int cols;
+	int rows;
+	// struct CMat src;
 	double *forcefield_y;
 	double *forcefield_x;
 	double *image_in_inverse;
@@ -280,21 +282,19 @@ static const double Pixel_LUT[] = {
 DWORD WINAPI forcefield_thread(struct ES *thread_data) {
 	HANDLE mutex = thread_data->mutex;
 	HANDLE semaphore = thread_data->semaphore;
-	int *current_row = &thread_data->tmp;
-	const int cols = thread_data->src.cols;
-	const int rows = thread_data->src.rows;
+	const int cols = thread_data->cols;
+	const int rows = thread_data->rows;
 	const double *image_in_inverse = thread_data->image_in_inverse;
 	double *forcefield_y = thread_data->forcefield_y;
 	double *forcefield_x = thread_data->forcefield_x;
 	while (1) {
 		WaitForSingleObject(mutex, INFINITE);
-		if (*current_row >= rows) {
-			ReleaseMutex(mutex);
+		int i = thread_data->tmp++;
+		ReleaseMutex(mutex);
+		if (i >= rows) {
 			ReleaseSemaphore(semaphore, 1, NULL);
 			return 1;
 		}
-		int i = (*current_row)++;
-		ReleaseMutex(mutex);
 		int p1 = i * cols;
 		for (int j = 0; j < cols; j++) {
 			forcefield_y[p1] = 0;
@@ -359,18 +359,16 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 		exit(0);
 	}
 
-	struct ES es;
 	const int color = 3 - 1;
 	unsigned char *particle_lut = (unsigned char *)malloc(sizeof(unsigned char) * (color + 1));
 	char out_file[50];
-	es.pixel_count = src.cols * src.rows;
-	es.image_in_inverse = (double *)malloc(sizeof(double) * es.pixel_count);
-	;
-	// unsigned char *image_tmp = (unsigned char *)malloc(sizeof(unsigned char) * es.pixel_count);
-	int *image_particle = (int *)malloc(sizeof(int) * es.pixel_count);
+	const int pixel_count = src.cols * src.rows;
+	double *image_in_inverse = (double *)malloc(sizeof(double) * pixel_count);
+	// unsigned char *image_tmp = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
+	int *image_particle = (int *)malloc(sizeof(int) * pixel_count);
 	dst->cols = src.cols;
 	dst->rows = src.rows;
-	dst->data = (unsigned char *)malloc(sizeof(unsigned char) * es.pixel_count);
+	dst->data = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialization
@@ -378,11 +376,11 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 	for (int i = 0; i <= color; i++) {
 		particle_lut[i] = (double)i * 255 / color + 0.5;
 	}
-	int particle_count = es.pixel_count * 255;
+	int particle_count = pixel_count * 255;
 	// memset(image_tmp, 255, sizeof(unsigned char) * pixel_count);
-	memset(dst->data, 255, sizeof(unsigned char) * es.pixel_count);
-	for (int p = 0; p < es.pixel_count; p++) {
-		es.image_in_inverse[p] = Pixel_LUT[src.data[p]];
+	memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
+	for (int p = 0; p < pixel_count; p++) {
+		image_in_inverse[p] = Pixel_LUT[src.data[p]];
 		// particle_count += image_in_inverse[p];
 		particle_count -= src.data[p];
 		image_particle[p] = color;
@@ -409,7 +407,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 		i--;
 	}
 	if (enable_debug) {
-		for (int p = 0; p < es.pixel_count; p++) {
+		for (int p = 0; p < pixel_count; p++) {
 			dst->data[p] = particle_lut[image_particle[p]];
 		}
 		sprintf(out_file, ".\\output\\0.bmp");
@@ -432,12 +430,16 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 	//////////////////////////////////////////////////////////////////////////
 	///// Create Forcefield Table
 	printf("Create Forcefield Table, \n");
-	double *forcefield_y = (double *)malloc(sizeof(double) * es.pixel_count);
-	double *forcefield_x = (double *)malloc(sizeof(double) * es.pixel_count);
+	double *forcefield_y = (double *)malloc(sizeof(double) * pixel_count);
+	double *forcefield_x = (double *)malloc(sizeof(double) * pixel_count);
+	struct ES es;
+	es.pixel_count = pixel_count;
 	es.forcefield_y = forcefield_y;
 	es.forcefield_x = forcefield_x;
+	es.image_in_inverse = image_in_inverse;
+	es.cols = src.cols;
+	es.rows = src.rows;
 	es.tmp = 0;
-	es.src = src;
 	es.mutex = CreateMutex(NULL, FALSE, TEXT("hMutex"));
 	es.semaphore = CreateSemaphore(NULL, MAX_THREAD, MAX_THREAD, NULL);
 	for (int i = 0; i < MAX_THREAD; i++) {
@@ -447,10 +449,10 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 	for (int i = 0; i < MAX_THREAD; i++) {
 		WaitForSingleObject(es.semaphore, INFINITE);
 	}
+	ReleaseSemaphore(es.semaphore, MAX_THREAD, NULL);
 
 	//////////////////////////////////////////////////////////////////////////
 	///// process
-	double instead_y, instead_x;
 	for (int iteration = 1; iteration <= max_iterations; iteration++) {
 		printf("Iterations %d\n", iteration);
 
@@ -487,8 +489,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 			// Repulsion
 			for (int other_particle = 0; other_particle < particle_count; other_particle++) {
 				if (current_particle != other_particle) {
-					instead_y = particles_y[other_particle] - particles_y[current_particle];
-					instead_x = particles_x[other_particle] - particles_x[current_particle];
+					double instead_y = particles_y[other_particle] - particles_y[current_particle];
+					double instead_x = particles_x[other_particle] - particles_x[current_particle];
 					if (instead_y != 0 || instead_x != 0) {
 						double t = color * (instead_y * instead_y + instead_x * instead_x);
 						newpos_y -= instead_y / t;
@@ -548,14 +550,13 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 		}
 
 		// Output
-		for (int p = 0; p < es.pixel_count; p++) {
+		for (int p = 0; p < pixel_count; p++) {
 			dst->data[p] = 255;
 			image_particle[p] = color;
 		}
-		int out_Y, out_X;
 		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
-			out_Y = particles_y[current_particle] + 0.5;
-			out_X = particles_x[current_particle] + 0.5;
+			int out_Y = particles_y[current_particle] + 0.5;
+			int out_X = particles_x[current_particle] + 0.5;
 			if (out_Y >= src.rows) {
 				out_Y = src.rows - 1;
 			}
@@ -565,7 +566,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 			image_particle[out_Y * src.cols + out_X]--;
 		}
 
-		for (int p = 0; p < es.pixel_count; p++) {
+		for (int p = 0; p < pixel_count; p++) {
 			if (image_particle[p] < 0) {
 				image_particle[p] = 0;
 			}
@@ -580,7 +581,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 
 	// dst = dst->clone();
 
-	free(es.image_in_inverse);
+	free(image_in_inverse);
 	// free(image_tmp);
 
 	return 1;
