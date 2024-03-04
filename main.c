@@ -8,7 +8,7 @@ void main() {
 	// load image
 	if (cv_imread("lena.bmp", &src)) {
 		// process
-		if (ElectrostaticHalftoning2010(src, &dst, 1, 8, 1, 0, 2)) {
+		if (ElectrostaticHalftoning2010(src, &dst, 1, 8, 1, 0, 1)) {
 			// write output
 			cv_imwrite("../../output.bmp", dst);
 

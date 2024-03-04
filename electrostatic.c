@@ -294,8 +294,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		system("pause");
 		exit(0);
 	}
-	if (Debug != 0 && Debug != 1 && Debug != 2) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] Debug should be 0, 1 or 2");
+	if (Debug != 0 && Debug != 1) {
+		printf("[pixkit::halftoning::ElectrostaticHalftoning] Debug should be 0 or 1");
 		system("pause");
 		exit(0);
 	}
@@ -346,14 +346,12 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			continue;
 		}
 		image_particle[p]--;
-		if (Debug == 1) {
-			dst->data[p] = 0;
-		}
 		Particle--;
 	}
-	if (Debug == 1) {
-		cv_imwrite("output.bmp", *dst);
-	} else if (Debug == 2) {
+	if (Debug) {
+		for (int p = 0; p < pixel_count; p++) {
+			dst->data[p] = particle_lut[image_particle[p]];
+		}
 		sprintf(out_file, ".\\output\\0.bmp");
 		cv_imwrite(out_file, *dst);
 	}
@@ -527,9 +525,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			dst->data[p] = particle_lut[image_particle[p]];
 		}
 
-		if (Debug == 1) {
-			cv_imwrite("output.bmp", *dst);
-		} else if (Debug == 2) {
+		if (Debug) {
 			sprintf(out_file, ".\\output\\%d.bmp", iterations);
 			cv_imwrite(out_file, *dst);
 		}
