@@ -1,7 +1,9 @@
 #include "electrostatic.h"
 #include "cv.hpp"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 static const double Pixel_LUT[] = {
 	255.0 / 255.0,
