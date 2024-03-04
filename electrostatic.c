@@ -338,7 +338,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		int RandY = rand() % src.rows;
 		int RandX = rand() % src.cols;
 		int p = RandY * src.cols + RandX;
-		if (image_particle <= 0) {
+		if (image_particle[p] <= 0) {
 			continue;
 		}
 		// int RandNumber = rand() % 256;
