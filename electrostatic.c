@@ -10,12 +10,22 @@
 
 struct ES {
 	int tmp;
+	int current_iteration;
+	int max_iterations;
+	int enable_gridforce;
+	int enable_shake;
+	int color;
 	int pixel_count;
+	int particle_count;
 	int cols;
 	int rows;
 	// struct CMat src;
 	double *forcefield_y;
 	double *forcefield_x;
+	double *particles_y;
+	double *particles_x;
+	double *particles_new_y;
+	double *particles_new_x;
 	double *image_in_inverse;
 	HANDLE semaphore;
 	HANDLE mutex;
@@ -322,6 +332,128 @@ DWORD WINAPI forcefield_thread(struct ES *thread_data) {
 	}
 }
 
+DWORD WINAPI iteration_thread(struct ES *thread_data) {
+	HANDLE mutex = thread_data->mutex;
+	HANDLE semaphore = thread_data->semaphore;
+
+	const int max_iterations = thread_data->max_iterations;
+	const int enable_gridforce = thread_data->enable_gridforce;
+	const int enable_shake = thread_data->enable_shake;
+	const int color = thread_data->color;
+	const int cols = thread_data->cols;
+	const int rows = thread_data->rows;
+	const int particle_count = thread_data->particle_count;
+	const int current_iteration = thread_data->current_iteration;
+	double *forcefield_y = thread_data->forcefield_y;
+	double *forcefield_x = thread_data->forcefield_x;
+	double *particles_y = thread_data->particles_y;
+	double *particles_x = thread_data->particles_x;
+	double *particles_new_y = thread_data->particles_new_y;
+	double *particles_new_x = thread_data->particles_new_x;
+
+	while (1) {
+		WaitForSingleObject(mutex, INFINITE);
+		int current_particle = thread_data->tmp++;
+		ReleaseMutex(mutex);
+		if (current_particle >= particle_count) {
+			ReleaseSemaphore(semaphore, 1, NULL);
+			return 1;
+		}
+		double newpos_y = 0;
+		double newpos_x = 0;
+		double real_y = particles_y[current_particle] - (int)particles_y[current_particle];
+		double real_x = particles_x[current_particle] - (int)particles_x[current_particle];
+
+		// Attraction(by using bilinear interpolation)
+		if (real_y == 0 && real_x == 0) {
+			int p = (int)particles_y[current_particle] * cols + (int)particles_x[current_particle];
+			newpos_y = forcefield_y[p];
+			newpos_x = forcefield_x[p];
+		} else {
+			int bilinear_y1 = particles_y[current_particle];
+			int bilinear_x1 = particles_x[current_particle];
+			int bilinear_y2 = bilinear_y1 + 1;
+			int bilinear_x2 = bilinear_x1 + 1;
+			if (bilinear_y2 < rows && bilinear_x2 < cols) {
+				double a = (double)bilinear_x2 - particles_x[current_particle];
+				double b = (double)bilinear_y2 - particles_y[current_particle];
+				double c = particles_x[current_particle] - (double)bilinear_x1;
+				double d = particles_y[current_particle] - (double)bilinear_y1;
+				int p11 = bilinear_y1 * cols + bilinear_x1;
+				int p12 = bilinear_y1 * cols + bilinear_x2;
+				int p21 = bilinear_y2 * cols + bilinear_x1;
+				int p22 = bilinear_y2 * cols + bilinear_x2;
+				newpos_y = forcefield_y[p11] * a * b + forcefield_y[p12] * c * b + forcefield_y[p21] * a * d + forcefield_y[p22] * c * d;
+				newpos_x = forcefield_x[p11] * a * b + forcefield_x[p12] * c * b + forcefield_x[p21] * a * d + forcefield_x[p22] * c * d;
+			}
+		}
+
+		// Repulsion
+		for (int other_particle = 0; other_particle < particle_count; other_particle++) {
+			if (current_particle != other_particle) {
+				double instead_y = particles_y[other_particle] - particles_y[current_particle];
+				double instead_x = particles_x[other_particle] - particles_x[current_particle];
+				if (instead_y != 0 || instead_x != 0) {
+					double t = color * (instead_y * instead_y + instead_x * instead_x);
+					newpos_y -= instead_y / t;
+					newpos_x -= instead_x / t;
+				}
+			}
+		}
+
+		// result (new position of particles)
+		particles_new_y[current_particle] += 0.1 * newpos_y;
+		particles_new_x[current_particle] += 0.1 * newpos_x;
+		if (enable_gridforce) {
+			// Add GridForce to find discrete particle locations
+			// double real_y = particles_y[current_particle] - (int)particles_y[current_particle];
+			// double real_x = particles_x[current_particle] - (int)particles_x[current_particle];
+			if (real_y != 0 || real_x != 0) {
+				if (real_y < 0.5) {
+					real_y = -real_y;
+				} else {
+					real_y = 1 - real_y;
+				}
+				if (real_x < 0.5) {
+					real_x = -real_x;
+				} else {
+					real_x = 1 - real_x;
+				}
+				double vector3 = sqrt(real_y * real_y + real_x * real_x);
+				double t = 0.35 / (vector3 + pow(vector3, 9) * 10000);
+				if (real_y != 0) {
+					// GridForce_Y = 3.5 * real_y / (vector3 * (1 + pow(vector3, 8) * 10000));
+					particles_new_y[current_particle] += real_y * t;
+				}
+				if (real_x != 0) {
+					// GridForce_X = 3.5 * real_x / (vector3 * (1 + pow(vector3, 8) * 10000));
+					particles_new_x[current_particle] += real_x * t;
+				}
+			}
+		}
+
+		// Shake
+		if (enable_shake && current_iteration % 10 == 0 && max_iterations > 64) {
+			double t = (log10((double)max_iterations) / log10(2.0) - 6) * exp(current_iteration / 1000.0) / 10;
+			particles_new_y[current_particle] += t;
+			particles_new_x[current_particle] += t;
+		}
+
+		if (particles_new_y[current_particle] < 0) {
+			particles_new_y[current_particle] = 0;
+		} else if (particles_new_y[current_particle] >= rows) {
+			particles_new_y[current_particle] = rows - 1;
+		}
+		if (particles_new_x[current_particle] < 0) {
+			particles_new_x[current_particle] = 0;
+		} else if (particles_new_x[current_particle] >= cols) {
+			particles_new_x[current_particle] = cols - 1;
+		}
+
+		printf("%d\r", current_particle);
+	}
+}
+
 int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_initial_charge, int max_iterations, int enable_gridforce, int enable_shake, int enable_debug) {
 	//////////////////////////////////////////////////////////////////////////
 	///// exceptions
@@ -390,8 +522,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialize the Particle's position
-	double *particles_y = (double *)malloc(sizeof(double) * (int)particle_count);
-	double *particles_x = (double *)malloc(sizeof(double) * (int)particle_count);
+	double *particles_y = (double *)malloc(sizeof(double) * particle_count);
+	double *particles_x = (double *)malloc(sizeof(double) * particle_count);
 	for (int i = particle_count; i > 0;) {
 		// int RandY = rand() % src.rows;
 		// int RandX = rand() % src.cols;
@@ -453,101 +585,38 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 
 	//////////////////////////////////////////////////////////////////////////
 	///// process
+	es.max_iterations = max_iterations;
+	es.enable_gridforce = enable_gridforce;
+	es.enable_shake = enable_shake;
+	es.color = color;
+	es.particle_count = particle_count;
+	es.particles_y = particles_y;
+	es.particles_x = particles_x;
+	double *particles_new_y = (double *)malloc(sizeof(double) * particle_count);
+	double *particles_new_x = (double *)malloc(sizeof(double) * particle_count);
+	memcpy(particles_new_y, particles_y, sizeof(double) * particle_count);
+	memcpy(particles_new_x, particles_x, sizeof(double) * particle_count);
+	es.particles_new_y = particles_new_y;
+	es.particles_new_x = particles_new_x;
 	for (int iteration = 1; iteration <= max_iterations; iteration++) {
 		printf("Iterations %d\n", iteration);
 
-		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
-			double newpos_y = 0;
-			double newpos_x = 0;
-			double real_y = particles_y[current_particle] - (int)particles_y[current_particle];
-			double real_x = particles_x[current_particle] - (int)particles_x[current_particle];
-
-			// Attraction(by using bilinear interpolation)
-			if (real_y == 0 && real_x == 0) {
-				int p = (int)particles_y[current_particle] * src.cols + (int)particles_x[current_particle];
-				newpos_y = forcefield_y[p];
-				newpos_x = forcefield_x[p];
-			} else {
-				int bilinear_y1 = particles_y[current_particle];
-				int bilinear_x1 = particles_x[current_particle];
-				int bilinear_y2 = bilinear_y1 + 1;
-				int bilinear_x2 = bilinear_x1 + 1;
-				if (bilinear_y2 < src.rows && bilinear_x2 < src.cols) {
-					double a = (double)bilinear_x2 - particles_x[current_particle];
-					double b = (double)bilinear_y2 - particles_y[current_particle];
-					double c = particles_x[current_particle] - (double)bilinear_x1;
-					double d = particles_y[current_particle] - (double)bilinear_y1;
-					int p11 = bilinear_y1 * src.cols + bilinear_x1;
-					int p12 = bilinear_y1 * src.cols + bilinear_x2;
-					int p21 = bilinear_y2 * src.cols + bilinear_x1;
-					int p22 = bilinear_y2 * src.cols + bilinear_x2;
-					newpos_y = forcefield_y[p11] * a * b + forcefield_y[p12] * c * b + forcefield_y[p21] * a * d + forcefield_y[p22] * c * d;
-					newpos_x = forcefield_x[p11] * a * b + forcefield_x[p12] * c * b + forcefield_x[p21] * a * d + forcefield_x[p22] * c * d;
-				}
-			}
-
-			// Repulsion
-			for (int other_particle = 0; other_particle < particle_count; other_particle++) {
-				if (current_particle != other_particle) {
-					double instead_y = particles_y[other_particle] - particles_y[current_particle];
-					double instead_x = particles_x[other_particle] - particles_x[current_particle];
-					if (instead_y != 0 || instead_x != 0) {
-						double t = color * (instead_y * instead_y + instead_x * instead_x);
-						newpos_y -= instead_y / t;
-						newpos_x -= instead_x / t;
-					}
-				}
-			}
-
-			// result (new position of particles)
-			particles_y[current_particle] += 0.1 * newpos_y;
-			particles_x[current_particle] += 0.1 * newpos_x;
-			if (enable_gridforce) {
-				// Add GridForce to find discrete particle locations
-				// double real_y = particles_y[current_particle] - (int)particles_y[current_particle];
-				// double real_x = particles_x[current_particle] - (int)particles_x[current_particle];
-				if (real_y != 0 || real_x != 0) {
-					if (real_y < 0.5) {
-						real_y = -real_y;
-					} else {
-						real_y = 1 - real_y;
-					}
-					if (real_x < 0.5) {
-						real_x = -real_x;
-					} else {
-						real_x = 1 - real_x;
-					}
-					double vector3 = sqrt(real_y * real_y + real_x * real_x);
-					double t = 0.35 / (vector3 + pow(vector3, 9) * 10000);
-					if (real_y != 0) {
-						// GridForce_Y = 3.5 * real_y / (vector3 * (1 + pow(vector3, 8) * 10000));
-						particles_y[current_particle] += real_y * t;
-					}
-					if (real_x != 0) {
-						// GridForce_X = 3.5 * real_x / (vector3 * (1 + pow(vector3, 8) * 10000));
-						particles_x[current_particle] += real_x * t;
-					}
-				}
-			}
-
-			// Shake
-			if (enable_shake && iteration % 10 == 0 && max_iterations > 64) {
-				double t = (log10((double)max_iterations) / log10(2.0) - 6) * exp(iteration / 1000.0) / 10;
-				particles_y[current_particle] += t;
-				particles_x[current_particle] += t;
-			}
-
-			if (particles_y[current_particle] < 0) {
-				particles_y[current_particle] = 0;
-			} else if (particles_y[current_particle] >= src.rows) {
-				particles_y[current_particle] = src.rows - 1;
-			}
-			if (particles_x[current_particle] < 0) {
-				particles_x[current_particle] = 0;
-			} else if (particles_x[current_particle] >= src.cols) {
-				particles_x[current_particle] = src.cols - 1;
-			}
+		WaitForSingleObject(es.mutex, INFINITE);
+		es.tmp = 0;
+		es.current_iteration = iteration;
+		ReleaseMutex(es.mutex);
+		for (int i = 0; i < MAX_THREAD; i++) {
+			WaitForSingleObject(es.semaphore, INFINITE);
+			CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)iteration_thread, &es, 0, NULL);
 		}
+		for (int i = 0; i < MAX_THREAD; i++) {
+			WaitForSingleObject(es.semaphore, INFINITE);
+		}
+		ReleaseSemaphore(es.semaphore, MAX_THREAD, NULL);
+		printf("\n");
+
+		memcpy(particles_y, particles_new_y, sizeof(double) * particle_count);
+		memcpy(particles_x, particles_new_x, sizeof(double) * particle_count);
 
 		// Output
 		for (int p = 0; p < pixel_count; p++) {
