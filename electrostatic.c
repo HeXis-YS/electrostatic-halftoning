@@ -1,9 +1,23 @@
 #include "electrostatic.h"
 #include "cv.hpp"
+#include <Windows.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define MAX_THREAD 32
+
+struct ES {
+	int tmp;
+	int pixel_count;
+	struct CMat src;
+	double *forcefield_y;
+	double *forcefield_x;
+	double *image_in_inverse;
+	HANDLE semaphore;
+	HANDLE mutex;
+};
 
 static const double Pixel_LUT[] = {
 	255.0 / 255.0,
@@ -263,6 +277,51 @@ static const double Pixel_LUT[] = {
 	1.0 / 255.0,
 	0.0 / 255.0};
 
+DWORD WINAPI forcefield_thread(struct ES *thread_data) {
+	HANDLE mutex = thread_data->mutex;
+	HANDLE semaphore = thread_data->semaphore;
+	int *current_row = &thread_data->tmp;
+	const int cols = thread_data->src.cols;
+	const int rows = thread_data->src.rows;
+	const double *image_in_inverse = thread_data->image_in_inverse;
+	double *forcefield_y = thread_data->forcefield_y;
+	double *forcefield_x = thread_data->forcefield_x;
+	while (1) {
+		WaitForSingleObject(mutex, INFINITE);
+		if (*current_row >= rows) {
+			ReleaseMutex(mutex);
+			ReleaseSemaphore(semaphore, 1, NULL);
+			return 1;
+		}
+		int i = (*current_row)++;
+		ReleaseMutex(mutex);
+		int p1 = i * cols;
+		for (int j = 0; j < cols; j++) {
+			forcefield_y[p1] = 0;
+			forcefield_x[p1] = 0;
+			int a = -i;
+			for (int y = 0, p2 = 0; y < rows; y++) {
+				int aa = a * a;
+				int b = -j;
+				for (int x = 0; x < cols; x++) {
+					if (i != y || j != x) {
+						double t = image_in_inverse[p2] / (aa + b * b);
+						// forcefield_y[i][j] += (1 - image_in[y][x]) * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
+						// forcefield_x[i][j] += (1 - image_in[y][x]) * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
+						forcefield_y[p1] += a * t;
+						forcefield_x[p1] += b * t;
+					}
+					b++;
+					p2++;
+				}
+				a++;
+			}
+			p1++;
+		}
+		printf("%d\r", i);
+	}
+}
+
 int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCharge, int Iterations, int GridForce, int Shake, int Debug) {
 	//////////////////////////////////////////////////////////////////////////
 	///// exceptions
@@ -300,11 +359,14 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		exit(0);
 	}
 
+	struct ES es;
 	const int color = 3 - 1;
 	unsigned char *particle_lut = (unsigned char *)malloc(sizeof(unsigned char) * (color + 1));
 	char out_file[50];
 	int pixel_count = src.cols * src.rows;
+	es.pixel_count = pixel_count;
 	double *image_in_inverse = (double *)malloc(sizeof(double) * pixel_count);
+	es.image_in_inverse = image_in_inverse;
 	// unsigned char *image_tmp = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
 	int *image_particle = (int *)malloc(sizeof(int) * pixel_count);
 	dst->cols = src.cols;
@@ -374,29 +436,18 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	printf("Create Forcefield Table, \n");
 	double *forcefield_y = (double *)malloc(sizeof(double) * pixel_count);
 	double *forcefield_x = (double *)malloc(sizeof(double) * pixel_count);
-	for (int i = 0, p1 = 0; i < src.rows; i++) {
-		for (int j = 0; j < src.cols; j++) {
-			forcefield_y[p1] = 0;
-			forcefield_x[p1] = 0;
-			int a = -i;
-			for (int y = 0, p2 = 0; y < src.rows; y++) {
-				int aa = a * a;
-				int b = -j;
-				for (int x = 0; x < src.cols; x++) {
-					if (i != y || j != x) {
-						double t = image_in_inverse[p2] / (aa + b * b);
-						// forcefield_y[i][j] += (1 - image_in[y][x]) * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
-						// forcefield_x[i][j] += (1 - image_in[y][x]) * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
-						forcefield_y[p1] += a * t;
-						forcefield_x[p1] += b * t;
-					}
-					b++;
-					p2++;
-				}
-				a++;
-			}
-			p1++;
-		}
+	es.forcefield_y = forcefield_y;
+	es.forcefield_x = forcefield_x;
+	es.tmp = 0;
+	es.src = src;
+	es.mutex = CreateMutex(NULL, FALSE, TEXT("hMutex"));
+	es.semaphore = CreateSemaphore(NULL, MAX_THREAD, MAX_THREAD, NULL);
+	for (int i = 0; i < MAX_THREAD; i++) {
+		WaitForSingleObject(es.semaphore, INFINITE);
+		CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)forcefield_thread, &es, 0, NULL);
+	}
+	for (int i = 0; i < MAX_THREAD; i++) {
+		WaitForSingleObject(es.semaphore, INFINITE);
 	}
 
 	//////////////////////////////////////////////////////////////////////////
