@@ -333,8 +333,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	///// Initialize the Particle's position
 	double *Particle_Y = (double *)malloc(sizeof(double) * (int)CountParticle);
 	double *Particle_X = (double *)malloc(sizeof(double) * (int)CountParticle);
-	int Particle = CountParticle;
-	while (Particle > 0) {
+	for (int i = CountParticle; i > 0;) {
 		int RandY = rand() % src.rows;
 		int RandX = rand() % src.cols;
 		int p = RandY * src.cols + RandX;
@@ -346,7 +345,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			continue;
 		}
 		image_particle[p]--;
-		Particle--;
+		i--;
 	}
 	if (Debug) {
 		for (int p = 0; p < pixel_count; p++) {
@@ -403,11 +402,10 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	//////////////////////////////////////////////////////////////////////////
 	///// process
 	double instead_y, instead_x;
-	Particle = CountParticle;
 	for (int iterations = 1; iterations <= Iterations; iterations++) {
 		printf("Iterations %d\n", iterations);
 
-		for (int NowCharge = 0; NowCharge < Particle; NowCharge++) {
+		for (int NowCharge = 0; NowCharge < CountParticle; NowCharge++) {
 			double NewPosition_Y = 0, NewPosition_X = 0;
 			double real_y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
 			double real_x = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
@@ -437,7 +435,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			}
 
 			// Repulsion
-			for (int OtherCharge = 0; OtherCharge < Particle; OtherCharge++) {
+			for (int OtherCharge = 0; OtherCharge < CountParticle; OtherCharge++) {
 				if (NowCharge != OtherCharge) {
 					instead_y = Particle_Y[OtherCharge] - Particle_Y[NowCharge];
 					instead_x = Particle_X[OtherCharge] - Particle_X[NowCharge];
@@ -506,7 +504,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		}
 		int out_Y, out_X;
 		double count_errorY = 0, count_errorX = 0;
-		for (int NowCharge = 0; NowCharge < Particle; NowCharge++) {
+		for (int NowCharge = 0; NowCharge < CountParticle; NowCharge++) {
 			out_Y = Particle_Y[NowCharge] + 0.5;
 			out_X = Particle_X[NowCharge] + 0.5;
 			if (out_Y >= src.rows) {
