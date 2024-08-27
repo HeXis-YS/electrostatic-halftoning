@@ -45,19 +45,21 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialization
-	double CountParticle = 0;
+	int particle_count = 0;
 	memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
 	for (int p = 0; p < pixel_count; p++) {
-		image_in[p] = (double)(255 - src.data[p]) / 255.0;
-		CountParticle = CountParticle + image_in[p];
+		int tmp = 255 - src.data[p];
+		image_in[p] = (double)tmp / 255.0;
+		particle_count += tmp;
 	}
-	printf("The number of black pixel(charge) = %d\n", (int)CountParticle);
+	particle_count = (particle_count + 127) / 255;
+	printf("The number of black pixel(charge) = %d\n", particle_count);
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialize the Particle's position
-	double *Particle_Y = (double *)malloc(sizeof(double) * (int)CountParticle);
-	double *Particle_X = (double *)malloc(sizeof(double) * (int)CountParticle);
-	int Particle = CountParticle;
+	double *Particle_Y = (double *)malloc(sizeof(double) * particle_count);
+	double *Particle_X = (double *)malloc(sizeof(double) * particle_count);
+	int Particle = particle_count;
 	while (Particle > 0) {
 		int RandY = rand() % rows;
 		int RandX = rand() % cols;
@@ -95,7 +97,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	//////////////////////////////////////////////////////////////////////////
 	///// process
 	double instead_y, instead_x;
-	Particle = CountParticle;
+	Particle = particle_count;
 	for (int iterations = 1; iterations <= Iterations; iterations++) {
 		printf("Iterations %d\n", iterations);
 
