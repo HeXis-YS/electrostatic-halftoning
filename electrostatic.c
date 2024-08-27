@@ -112,32 +112,6 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	}
 
 	//////////////////////////////////////////////////////////////////////////
-	///// Create Forcefield Table
-	printf("Create Forcefield Table, \n");
-	double **forcefield_y = (double **)malloc(sizeof(double *) * src.rows);
-	for (int i = 0; i < src.rows; i++) {
-		forcefield_y[i] = (double *)malloc(sizeof(double *) * src.cols);
-	}
-	double **forcefield_x = (double **)malloc(sizeof(double *) * src.rows);
-	for (int i = 0; i < src.rows; i++) {
-		forcefield_x[i] = (double *)malloc(sizeof(double *) * src.cols);
-	}
-	for (int i = 0; i < src.rows; i++) {
-		for (int j = 0; j < src.cols; j++) {
-			forcefield_y[i][j] = 0;
-			forcefield_x[i][j] = 0;
-			for (int y = 0; y < src.rows; y++) {
-				for (int x = 0; x < src.cols; x++) {
-					if (!(i == y && j == x)) {
-						forcefield_y[i][j] += (1 - image_in[y][x]) * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
-						forcefield_x[i][j] += (1 - image_in[y][x]) * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
-					}
-				}
-			}
-		}
-	}
-
-	//////////////////////////////////////////////////////////////////////////
 	///// process
 	double instead_y, instead_x;
 	Particle = CountParticle;
@@ -148,18 +122,13 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			double NewPosition_Y = 0, NewPosition_X = 0;
 			double GridForce_Y = 0, GridForce_X = 0;
 
-			// Attraction(by using bilinear interpolation)
-			if (Particle_Y[NowCharge] - (int)Particle_Y[NowCharge] == 0 && Particle_X[NowCharge] - (int)Particle_X[NowCharge] == 0) {
-				NewPosition_Y = forcefield_y[(int)Particle_Y[NowCharge]][(int)Particle_X[NowCharge]];
-				NewPosition_X = forcefield_x[(int)Particle_Y[NowCharge]][(int)Particle_X[NowCharge]];
-			} else {
-				int Bilinear_y1 = Particle_Y[NowCharge];
-				int Bilinear_x1 = Particle_X[NowCharge];
-				int Bilinear_y2 = Bilinear_y1 + 1;
-				int Bilinear_x2 = Bilinear_x1 + 1;
-				if (Bilinear_y1 + 1 < src.rows && Bilinear_x1 + 1 < src.cols) {
-					NewPosition_Y = forcefield_y[Bilinear_y1][Bilinear_x1] * ((double)Bilinear_x2 - Particle_X[NowCharge]) * ((double)Bilinear_y2 - Particle_Y[NowCharge]) + forcefield_y[Bilinear_y1][Bilinear_x2] * (Particle_X[NowCharge] - (double)Bilinear_x1) * ((double)Bilinear_y2 - Particle_Y[NowCharge]) + forcefield_y[Bilinear_y2][Bilinear_x1] * ((double)Bilinear_x2 - Particle_X[NowCharge]) * (Particle_Y[NowCharge] - (double)Bilinear_y1) + forcefield_y[Bilinear_y2][Bilinear_x2] * (Particle_X[NowCharge] - (double)Bilinear_x1) * (Particle_Y[NowCharge] - (double)Bilinear_y1);
-					NewPosition_X = forcefield_x[Bilinear_y1][Bilinear_x1] * ((double)Bilinear_x2 - Particle_X[NowCharge]) * ((double)Bilinear_y2 - Particle_Y[NowCharge]) + forcefield_x[Bilinear_y1][Bilinear_x2] * (Particle_X[NowCharge] - (double)Bilinear_x1) * ((double)Bilinear_y2 - Particle_Y[NowCharge]) + forcefield_x[Bilinear_y2][Bilinear_x1] * ((double)Bilinear_x2 - Particle_X[NowCharge]) * (Particle_Y[NowCharge] - (double)Bilinear_y1) + forcefield_x[Bilinear_y2][Bilinear_x2] * (Particle_X[NowCharge] - (double)Bilinear_x1) * (Particle_Y[NowCharge] - (double)Bilinear_y1);
+			// Attraction
+			double i = Particle_Y[NowCharge] - 0.5;
+			double j = Particle_X[NowCharge] - 0.5;
+			for (int y = 0; y < src.rows; y++) {
+				for (int x = 0; x < src.cols; x++) {
+					NewPosition_Y += (1 - image_in[y][x]) * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
+					NewPosition_X += (1 - image_in[y][x]) * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
 				}
 			}
 
