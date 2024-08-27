@@ -59,23 +59,15 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	///// Initialize the Particle's position
 	double *Particle_Y = (double *)malloc(sizeof(double) * particle_count);
 	double *Particle_X = (double *)malloc(sizeof(double) * particle_count);
-	int Particle = particle_count;
-	while (Particle > 0) {
+	for (int particle = 0; particle < particle_count;) {
 		int RandY = rand() % rows;
 		int RandX = rand() % cols;
 		int p = RandY * cols + RandX;
-		if (dst->data[p] != 0) {
-			if (InitialCharge == 1) {
-				int RandNumber = rand() % 256;
-				if (RandNumber > src.data[p]) {
-					dst->data[p] = 0;
-					Particle--;
-				}
-			} else if (InitialCharge == 0) {
-				dst->data[p] = 0;
-				Particle--;
-			}
+		if (dst->data[p] == 0 || (InitialCharge && rand() % 256 <= src.data[p])) {
+			continue;
 		}
+		dst->data[p] = 0;
+		particle++;
 	}
 	if (Debug) {
 		cv_imwrite(".\\output\\0.bmp", *dst);
@@ -97,7 +89,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	//////////////////////////////////////////////////////////////////////////
 	///// process
 	double instead_y, instead_x;
-	Particle = particle_count;
+	int Particle = particle_count;
 	for (int iterations = 1; iterations <= Iterations; iterations++) {
 		printf("Iterations %d\n", iterations);
 
