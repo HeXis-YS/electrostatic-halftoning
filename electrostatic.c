@@ -35,13 +35,12 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		system("pause");
 		exit(0);
 	}
-	if (Debug != 0 && Debug != 1 && Debug != 2) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] Debug should be 0, 1 or 2");
+	if (Debug != 0 && Debug != 1) {
+		printf("[pixkit::halftoning::ElectrostaticHalftoning] Debug should be 0 or 1");
 		system("pause");
 		exit(0);
 	}
 
-	char out_file[50];
 	double **image_in = (double **)malloc(sizeof(double *) * src.rows);
 	for (int i = 0; i < src.rows; i++) {
 		image_in[i] = (double *)malloc(sizeof(double) * src.cols);
@@ -87,26 +86,22 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 				int RandNumber = rand() % 256;
 				if (RandNumber > src.data[RandY * src.cols + RandX]) {
 					image_tmp[RandY][RandX] = 0;
-					if (Debug == 1) {
+					if (Debug) {
 						dst->data[RandY * src.cols + RandX] = 0;
 					}
 					Particle--;
 				}
 			} else if (InitialCharge == 0) {
 				image_tmp[RandY][RandX] = 0;
-				if (Debug == 1) {
+				if (Debug) {
 					dst->data[RandY * src.cols + RandX] = 0;
 				}
 				Particle--;
 			}
 		}
 	}
-	if (Debug == 1) {
-		cv_imwrite("output.bmp", *dst);
-	} else if (Debug == 2) {
-		// fprintf(out_file, ".\\output\\0.bmp");
-		sprintf(out_file, ".\\output\\0.bmp");
-		cv_imwrite(out_file, *dst);
+	if (Debug) {
+		cv_imwrite(".\\output\\0.bmp", *dst);
 	}
 
 	//////////////////////////////////////////////////////////////////////////
@@ -280,9 +275,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			}
 		}
 
-		if (Debug == 1) {
-			cv_imwrite("output.bmp", *dst);
-		} else if (Debug == 2) {
+		if (Debug) {
+			char out_file[50];
 			sprintf(out_file, ".\\output\\%d.bmp", iterations);
 			cv_imwrite(out_file, *dst);
 		}
