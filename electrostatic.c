@@ -45,9 +45,9 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialization
+	memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
 	for (int p = 0; p < pixel_count; p++) {
 		image_in[p] = (double)src.data[p] / 255;
-		dst->data[p] = 255;
 	}
 
 	//////////////////////////////////////////////////////////////////////////
@@ -197,9 +197,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		}
 
 		// Output
-		for (int p = 0; p < pixel_count; p++) {
-			dst->data[p] = 255;
-		}
+		memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
 		int output_position;
 		int out_Y, out_X;
 		double count_errorY = 0, count_errorX = 0;
