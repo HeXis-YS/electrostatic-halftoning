@@ -47,14 +47,14 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	///// Initialization
 	memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
 	for (int p = 0; p < pixel_count; p++) {
-		image_in[p] = (double)src.data[p] / 255;
+		image_in[p] = (double)(255 - src.data[p]) / 255.0;
 	}
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Find the number of Particle
 	double CountParticle = 0;
 	for (int p = 0; p < pixel_count; p++) {
-		CountParticle = CountParticle + (1 - image_in[p]);
+		CountParticle = CountParticle + image_in[p];
 	}
 	printf("The number of black pixel(charge) = %d\n", (int)CountParticle);
 
@@ -113,8 +113,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			double j = Particle_X[NowCharge] - 0.5;
 			for (int y = 0, p = 0; y < rows; y++) {
 				for (int x = 0; x < cols; x++, p++) {
-					NewPosition_Y += (1 - image_in[p]) * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
-					NewPosition_X += (1 - image_in[p]) * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
+					NewPosition_Y += image_in[p] * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
+					NewPosition_X += image_in[p] * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
 				}
 			}
 
