@@ -7,38 +7,32 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 	//////////////////////////////////////////////////////////////////////////
 	///// exceptions
-	// if(src.type()!=CV_8U){
-	// 	CV_Error(CV_BadNumChannels,"[pixkit::halftoning::ElectrostaticHalftoning] image should be grayscale");
+	// For backward compatibility
+	int error = 0;
+	// if (src.type() != CV_8U) {
+	// 	CV_Error(CV_BadNumChannels, "[pixkit::halftoning::ElectrostaticHalftoning] image should be grayscale");
 	// }
 	if (InitialCharge != 0 && InitialCharge != 1) {
 		printf("[pixkit::halftoning::ElectrostaticHalftoning] InitialCharge should be 0 or 1");
-		system("pause");
-		exit(0);
-	}
-	if (Iterations < 1) {
+		error = 1;
+	} else if (Iterations < 1) {
 		printf("[pixkit::halftoning::ElectrostaticHalftoning] Iterations should be bigger than 1");
-		system("pause");
-		exit(0);
-	}
-	if (GridForce != 0 && GridForce != 1) {
+		error = 2;
+	} else if (GridForce != 0 && GridForce != 1) {
 		printf("[pixkit::halftoning::ElectrostaticHalftoning] GridForce should be 0 or 1");
-		system("pause");
-		exit(0);
-	}
-	if (Shake != 0 && Shake != 1) {
+		error = 3;
+	} else if (Shake != 0 && Shake != 1) {
 		printf("[pixkit::halftoning::ElectrostaticHalftoning] Shake should be 0 or 1");
-		system("pause");
-		exit(0);
-	}
-	if (Shake == 1 && Iterations <= 64) {
+		error = 4;
+	} else if (Shake == 1 && Iterations <= 64) {
 		printf("[pixkit::halftoning::ElectrostaticHalftoning] Iterations should be bigger than 64");
-		system("pause");
-		exit(0);
-	}
-	if (Debug != 0 && Debug != 1) {
+		error = 5;
+	} else if (Debug != 0 && Debug != 1) {
 		printf("[pixkit::halftoning::ElectrostaticHalftoning] Debug should be 0 or 1");
-		system("pause");
-		exit(0);
+		error = 6;
+	}
+	if (error) {
+		return error;
 	}
 
 	double **image_in = (double **)malloc(sizeof(double *) * src.rows);
@@ -287,5 +281,5 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	free(image_in);
 	free(image_tmp);
 
-	return 1;
+	return 0;
 }
