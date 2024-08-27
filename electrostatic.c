@@ -45,15 +45,10 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialization
+	double CountParticle = 0;
 	memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
 	for (int p = 0; p < pixel_count; p++) {
 		image_in[p] = (double)(255 - src.data[p]) / 255.0;
-	}
-
-	//////////////////////////////////////////////////////////////////////////
-	///// Find the number of Particle
-	double CountParticle = 0;
-	for (int p = 0; p < pixel_count; p++) {
 		CountParticle = CountParticle + image_in[p];
 	}
 	printf("The number of black pixel(charge) = %d\n", (int)CountParticle);
