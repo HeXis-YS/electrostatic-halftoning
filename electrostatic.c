@@ -37,35 +37,26 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 	int rows = src.rows;
 	int cols = src.cols;
-	double **image_in = (double **)malloc(sizeof(double *) * rows);
-	for (int i = 0; i < rows; i++) {
-		image_in[i] = (double *)malloc(sizeof(double) * cols);
-	}
-	unsigned char **image_tmp = (unsigned char **)malloc(sizeof(unsigned char *) * rows);
-	for (int i = 0; i < rows; i++) {
-		image_tmp[i] = (unsigned char *)malloc(sizeof(unsigned char) * cols);
-	}
+	int pixel_count = rows * cols;
+	double *image_in = (double *)malloc(sizeof(double) * pixel_count);
+	unsigned char *image_tmp = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
 	dst->rows = rows;
 	dst->cols = cols;
-	dst->data = (unsigned char *)malloc(sizeof(unsigned char) * rows * cols);
+	dst->data = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialization
-	for (int i = 0; i < rows; i++) {
-		for (int j = 0; j < cols; j++) {
-			image_in[i][j] = (double)src.data[i * cols + j] / 255;
-			image_tmp[i][j] = 255;
-			dst->data[i * cols + j] = 255;
-		}
+	for (int p = 0; p < pixel_count; p++) {
+		image_in[p] = (double)src.data[p] / 255;
+		image_tmp[p] = 255;
+		dst->data[p] = 255;
 	}
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Find the number of Particle
 	double CountParticle = 0;
-	for (int i = 0; i < rows; i++) {
-		for (int j = 0; j < cols; j++) {
-			CountParticle = CountParticle + (1 - image_in[i][j]);
-		}
+	for (int p = 0; p < pixel_count; p++) {
+		CountParticle = CountParticle + (1 - image_in[p]);
 	}
 	printf("The number of black pixel(charge) = %d\n", (int)CountParticle);
 
@@ -77,20 +68,21 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	while (Particle > 0) {
 		int RandY = rand() % rows;
 		int RandX = rand() % cols;
-		if (image_tmp[RandY][RandX] != 0) {
+		int p = RandY * cols + RandX;
+		if (image_tmp[p] != 0) {
 			if (InitialCharge == 1) {
 				int RandNumber = rand() % 256;
-				if (RandNumber > src.data[RandY * cols + RandX]) {
-					image_tmp[RandY][RandX] = 0;
+				if (RandNumber > src.data[p]) {
+					image_tmp[p] = 0;
 					if (Debug) {
-						dst->data[RandY * cols + RandX] = 0;
+						dst->data[p] = 0;
 					}
 					Particle--;
 				}
 			} else if (InitialCharge == 0) {
-				image_tmp[RandY][RandX] = 0;
+				image_tmp[p] = 0;
 				if (Debug) {
-					dst->data[RandY * cols + RandX] = 0;
+					dst->data[p] = 0;
 				}
 				Particle--;
 			}
@@ -103,9 +95,9 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	//////////////////////////////////////////////////////////////////////////
 	///// Record the Particle's position
 	int ParticleNumber = 0;
-	for (int i = 0; i < rows; i++) {
-		for (int j = 0; j < cols; j++) {
-			if (image_tmp[i][j] == 0) {
+	for (int i = 0, p = 0; i < rows; i++) {
+		for (int j = 0; j < cols; j++, p++) {
+			if (image_tmp[p] == 0) {
 				Particle_Y[ParticleNumber] = (double)i;
 				Particle_X[ParticleNumber] = (double)j;
 				ParticleNumber++;
@@ -127,10 +119,10 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			// Attraction
 			double i = Particle_Y[NowCharge] - 0.5;
 			double j = Particle_X[NowCharge] - 0.5;
-			for (int y = 0; y < rows; y++) {
-				for (int x = 0; x < cols; x++) {
-					NewPosition_Y += (1 - image_in[y][x]) * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
-					NewPosition_X += (1 - image_in[y][x]) * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
+			for (int y = 0, p = 0; y < rows; y++) {
+				for (int x = 0; x < cols; x++, p++) {
+					NewPosition_Y += (1 - image_in[p]) * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
+					NewPosition_X += (1 - image_in[p]) * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
 				}
 			}
 
@@ -213,11 +205,9 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		}
 
 		// Output
-		for (int y = 0; y < rows; y++) {
-			for (int x = 0; x < cols; x++) {
-				dst->data[y * cols + x] = 255;
-				image_tmp[y][x] = 255;
-			}
+		for (int p = 0; p < pixel_count; p++) {
+			dst->data[p] = 255;
+			image_tmp[p] = 255;
 		}
 		int output_position;
 		int out_Y, out_X;
@@ -231,13 +221,11 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			if (out_X >= cols) {
 				out_X = cols - 1;
 			}
-			image_tmp[out_Y][out_X] = 0;
+			image_tmp[out_Y * cols + out_X] = 0;
 		}
 
-		for (int y = 0; y < rows; y++) {
-			for (int x = 0; x < cols; x++) {
-				dst->data[y * cols + x] = image_tmp[y][x];
-			}
+		for (int p = 0; p < pixel_count; p++) {
+			dst->data[p] = image_tmp[p];
 		}
 
 		if (Debug) {
