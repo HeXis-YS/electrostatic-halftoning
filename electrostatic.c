@@ -67,23 +67,12 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			continue;
 		}
 		dst->data[p] = 0;
+		Particle_Y[particle] = (double)RandY + 0.5;
+		Particle_X[particle] = (double)RandX + 0.5;
 		particle++;
 	}
 	if (Debug) {
 		cv_imwrite(".\\output\\0.bmp", *dst);
-	}
-
-	//////////////////////////////////////////////////////////////////////////
-	///// Record the Particle's position
-	int ParticleNumber = 0;
-	for (int i = 0, p = 0; i < rows; i++) {
-		for (int j = 0; j < cols; j++, p++) {
-			if (dst->data[p] == 0) {
-				Particle_Y[ParticleNumber] = (double)i;
-				Particle_X[ParticleNumber] = (double)j;
-				ParticleNumber++;
-			}
-		}
 	}
 
 	//////////////////////////////////////////////////////////////////////////
