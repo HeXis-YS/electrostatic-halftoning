@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define possibility(x, y) __builtin_expect_with_probability(x, 1, y)
+#define likely(x) __builtin_expect(x, 1)
+#define unlikely(x) __builtin_expect(x, 0)
+
 int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_initial_charge, int max_iterations, int enable_gridforce, int enable_shake, int enable_debug) {
 
 	//////////////////////////////////////////////////////////////////////////
@@ -91,7 +95,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 		memcpy(position_Y_tmp, position_Y, sizeof(double) * particle_count);
 		memcpy(position_X_tmp, position_X, sizeof(double) * particle_count);
 		if (enable_shake) {
-			if (current_iteration % 10 == 0) {
+			if (possibility(current_iteration % 10 == 0, 0.1)) {
 				shake_tmp1 = shake_tmp * exp(current_iteration / 1000.0);
 				shake = 1;
 			} else {
@@ -115,11 +119,11 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 				double distance_Y_2 = distance_Y * distance_Y;
 				for (int x = 0; x < cols; x++, p++) {
 					double image_in_tmp = image_in[p];
-					if (image_in[p] == 0.0) {
+					if (unlikely(image_in[p] == 0.0)) {
 						continue;
 					}
 					double tmp = distance_Y_2 + distance_X_2_array[x];
-					if (tmp != 0.0) {
+					if (likely(tmp != 0.0)) {
 						tmp = image_in[p] / tmp;
 						position_X_offset += distance_Y * tmp;
 						position_Y_offset += distance_X_array[x] * tmp;
@@ -129,24 +133,25 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 
 			// Repulsion
 			for (int particle = 0; particle < particle_count; particle++) {
-				if (current_particle != particle) {
-					double distance_Y = position_Y_tmp[particle] - position_Y_current;
-					double distance_X = position_X_tmp[particle] - position_X_current;
-					double tmp = 0.0;
-					if (distance_Y != 0.0) {
-						tmp += distance_Y * distance_Y;
+				if (unlikely(current_particle == particle)) {
+					continue;
+				}
+				double distance_Y = position_Y_tmp[particle] - position_Y_current;
+				double distance_X = position_X_tmp[particle] - position_X_current;
+				double tmp = 0.0;
+				if (likely(distance_Y != 0.0)) {
+					tmp += distance_Y * distance_Y;
+				}
+				if (likely(distance_X != 0.0)) {
+					tmp += distance_X * distance_X;
+				}
+				if (likely(tmp != 0.0)) {
+					tmp = 1.0 / tmp;
+					if (likely(distance_Y != 0.0)) {
+						position_X_offset -= distance_Y * tmp;
 					}
-					if (distance_X != 0.0) {
-						tmp += distance_X * distance_X;
-					}
-					if (tmp != 0.0) {
-						tmp = 1.0 / tmp;
-						if (distance_Y != 0.0) {
-							position_X_offset -= distance_Y * tmp;
-						}
-						if (distance_X != 0.0) {
-							position_Y_offset -= distance_X * tmp;
-						}
+					if (likely(distance_X != 0.0)) {
+						position_Y_offset -= distance_X * tmp;
 					}
 				}
 			}
@@ -156,21 +161,21 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 				double grid_distance_Y = position_Y_current - (int)position_Y_current;
 				double grid_distance_X = position_X_current - (int)position_X_current;
 				double tmp = 0.0;
-				if (grid_distance_Y != 0.0) {
+				if (likely(grid_distance_Y != 0.0)) {
 					grid_distance_Y = (grid_distance_Y < 0.5) ? -grid_distance_Y : 1 - grid_distance_Y;
 					tmp += grid_distance_Y * grid_distance_Y;
 				}
-				if (grid_distance_X != 0.0) {
+				if (likely(grid_distance_X != 0.0)) {
 					grid_distance_X = (grid_distance_X < 0.5) ? -grid_distance_X : 1 - grid_distance_X;
 					tmp += grid_distance_X * grid_distance_X;
 				}
-				if (tmp != 0.0) {
+				if (likely(tmp != 0.0)) {
 					tmp = sqrt(tmp);
 					tmp = 3.5 / (tmp + 10000.0 * pow(tmp, 9.0));
-					if (grid_distance_Y != 0.0) {
+					if (likely(grid_distance_Y != 0.0)) {
 						position_X_offset += grid_distance_Y * tmp;
 					}
-					if (grid_distance_X != 0.0) {
+					if (likely(grid_distance_X != 0.0)) {
 						position_X_offset += grid_distance_X * tmp;
 					}
 				}
@@ -180,7 +185,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 			position_Y_offset *= 0.1;
 
 			// Shake
-			if (shake) {
+			if (unlikely(shake)) {
 				position_X_offset += shake_tmp1;
 				position_Y_offset += shake_tmp1;
 			}
