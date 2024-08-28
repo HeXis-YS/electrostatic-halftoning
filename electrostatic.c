@@ -80,6 +80,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	///// process
 	double instead_y, instead_x;
 	int Particle = particle_count;
+	double *distance_X_array = (double *)malloc(sizeof(double) * cols);
+	double *distance_X_2_array = (double *)malloc(sizeof(double) * cols);
 	for (int iterations = 1; iterations <= Iterations; iterations++) {
 		printf("Iterations %d\n", iterations);
 
@@ -88,12 +90,24 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			double GridForce_Y = 0, GridForce_X = 0;
 
 			// Attraction
-			double i = Particle_Y[NowCharge] - 0.5;
-			double j = Particle_X[NowCharge] - 0.5;
+			for (int x = 0; x < cols; x++) {
+				double distance_X = x + 0.5 - Particle_X[NowCharge];
+				distance_X_array[x] = distance_X;
+				distance_X_2_array[x] = distance_X * distance_X;
+			}
 			for (int y = 0, p = 0; y < rows; y++) {
+				double distance_Y = y + 0.5 - Particle_Y[NowCharge];
+				double distance_Y_2 = distance_Y * distance_Y;
 				for (int x = 0; x < cols; x++, p++) {
-					NewPosition_Y += image_in[p] * (y - i) / ((y - i) * (y - i) + (x - j) * (x - j));
-					NewPosition_X += image_in[p] * (x - j) / ((y - i) * (y - i) + (x - j) * (x - j));
+					if (image_in[p] == 0.0) {
+						continue;
+					}
+					double tmp = distance_Y_2 + distance_X_2_array[x];
+					if (tmp != 0) {
+						tmp = image_in[p] / tmp;
+						NewPosition_Y += distance_Y * tmp;
+						NewPosition_X += distance_X_array[x] * tmp;
+					}
 				}
 			}
 
