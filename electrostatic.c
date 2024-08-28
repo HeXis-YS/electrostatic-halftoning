@@ -1,4 +1,5 @@
 #include "cv.hpp"
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,33 +9,39 @@
 #define likely(x) __builtin_expect(x, 1)
 #define unlikely(x) __builtin_expect(x, 0)
 
-int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_initial_charge, int max_iterations, int enable_gridforce, int enable_shake, int enable_debug) {
-
+int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int max_iterations, int enable_initial_charge, int enable_gridforce, int enable_shake, int enable_adaptive_learning_rate, int enable_debug) {
 	//////////////////////////////////////////////////////////////////////////
 	///// exceptions
 	// For backward compatibility
 	int error = 0;
-	// if (src.type() != CV_8U) {
-	// 	CV_Error(CV_BadNumChannels, "[pixkit::halftoning::ElectrostaticHalftoning] image should be grayscale");
-	// }
-	if (enable_initial_charge != 0 && enable_initial_charge != 1) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] enable_initial_charge should be 0 or 1");
+	if (max_iterations < 0) {
+		printf("Error: max_iterations >= 0\n");
 		error = 1;
-	} else if (max_iterations < 1) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] max_iterations should be bigger than 1");
+	} else if (enable_initial_charge != 0 && enable_initial_charge != 1) {
+		printf("Error: enable_initial_charge = {0, 1}\n");
 		error = 2;
 	} else if (enable_gridforce != 0 && enable_gridforce != 1) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] enable_gridforce should be 0 or 1");
+		printf("Error: enable_gridforce = {0, 1}\n");
 		error = 3;
-	} else if (enable_shake != 0 && enable_shake != 1) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] enable_shake should be 0 or 1");
+	} else if (enable_adaptive_learning_rate != 0 && enable_adaptive_learning_rate != 1) {
+		printf("Error: enable_adaptive_learning_rate = {0, 1}\n");
 		error = 4;
-	} else if (enable_shake == 1 && max_iterations <= 64) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] max_iterations should be bigger than 64");
-		error = 5;
 	} else if (enable_debug != 0 && enable_debug != 1) {
-		printf("[pixkit::halftoning::ElectrostaticHalftoning] enable_debug should be 0 or 1");
-		error = 6;
+		printf("Error: enable_debug = {0, 1}\n");
+		error = 5;
+	} else {
+		if (enable_shake == 1) {
+			if (max_iterations <= 64) {
+				printf("Error: max_iterations > 64, when enable_shake = 1\n");
+				error = 6;
+			} else if (enable_adaptive_learning_rate == 1) {
+				printf("Error: max_iterations != 1, when enable_shake = 1\n");
+				error = 7;
+			}
+		} else if (enable_shake != 0) {
+			printf("Error: enable_shake = {0, 1}\n");
+			error = 8;
+		}
 	}
 	if (error) {
 		return error;
@@ -86,9 +93,17 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 	double *position_X_tmp = (double *)malloc(sizeof(double) * particle_count);
 	double *distance_X_array = (double *)malloc(sizeof(double) * cols);
 	double *distance_X_2_array = (double *)malloc(sizeof(double) * cols);
+	double *position_Y_offset_array = (double *)malloc(sizeof(double) * particle_count);
+	double *position_X_offset_array = (double *)malloc(sizeof(double) * particle_count);
 	int shake = 0;
 	double shake_tmp = log10((double)max_iterations) / log10(1024.0) - 0.6;
 	double shake_tmp1 = 0.0;
+	double learning_rate = 0.1;
+	double mean = 0.0;
+	double mean_last = DBL_MAX;
+	if (enable_debug) {
+		printf("Initial learning rate = %f\n", learning_rate);
+	}
 	for (int current_iteration = 1; current_iteration <= max_iterations; current_iteration++) {
 		printf("Iteration %d\n", current_iteration);
 		memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
@@ -102,9 +117,12 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 				shake = 0;
 			}
 		}
+		if (enable_adaptive_learning_rate) {
+			mean = 0.0;
+		}
 		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
-			double position_X_offset = 0.0;
 			double position_Y_offset = 0.0;
+			double position_X_offset = 0.0;
 			double position_Y_current = position_Y_tmp[current_particle];
 			double position_X_current = position_X_tmp[current_particle];
 
@@ -125,8 +143,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 					double tmp = distance_Y_2 + distance_X_2_array[x];
 					if (likely(tmp != 0.0)) {
 						tmp = image_in[p] / tmp;
-						position_X_offset += distance_Y * tmp;
-						position_Y_offset += distance_X_array[x] * tmp;
+						position_Y_offset += distance_Y * tmp;
+						position_X_offset += distance_X_array[x] * tmp;
 					}
 				}
 			}
@@ -148,10 +166,10 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 				if (likely(tmp != 0.0)) {
 					tmp = 1.0 / tmp;
 					if (likely(distance_Y != 0.0)) {
-						position_X_offset -= distance_Y * tmp;
+						position_Y_offset -= distance_Y * tmp;
 					}
 					if (likely(distance_X != 0.0)) {
-						position_Y_offset -= distance_X * tmp;
+						position_X_offset -= distance_X * tmp;
 					}
 				}
 			}
@@ -162,18 +180,18 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 				double grid_distance_X = position_X_current - (int)position_X_current;
 				double tmp = 0.0;
 				if (likely(grid_distance_Y != 0.0)) {
-					grid_distance_Y = (grid_distance_Y < 0.5) ? -grid_distance_Y : 1 - grid_distance_Y;
+					grid_distance_Y = possibility(grid_distance_Y <= 0.5, 0.5) ? -grid_distance_Y : 1 - grid_distance_Y;
 					tmp += grid_distance_Y * grid_distance_Y;
 				}
 				if (likely(grid_distance_X != 0.0)) {
-					grid_distance_X = (grid_distance_X < 0.5) ? -grid_distance_X : 1 - grid_distance_X;
+					grid_distance_X = possibility(grid_distance_X <= 0.5, 0.5) ? -grid_distance_X : 1 - grid_distance_X;
 					tmp += grid_distance_X * grid_distance_X;
 				}
 				if (likely(tmp != 0.0)) {
 					tmp = sqrt(tmp);
 					tmp = 3.5 / (tmp + 10000.0 * pow(tmp, 9.0));
 					if (likely(grid_distance_Y != 0.0)) {
-						position_X_offset += grid_distance_Y * tmp;
+						position_Y_offset += grid_distance_Y * tmp;
 					}
 					if (likely(grid_distance_X != 0.0)) {
 						position_X_offset += grid_distance_X * tmp;
@@ -181,26 +199,45 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 				}
 			}
 
-			position_X_offset *= 0.1;
-			position_Y_offset *= 0.1;
+			position_Y_offset_array[current_particle] = position_Y_offset;
+			position_X_offset_array[current_particle] = position_X_offset;
+
+			if (enable_adaptive_learning_rate) {
+				mean += sqrt(position_Y_offset * position_Y_offset + position_X_offset * position_X_offset);
+			}
+		}
+		if (enable_adaptive_learning_rate) {
+			mean /= (double)pixel_count;
+			while (mean * learning_rate >= mean_last) {
+				learning_rate *= 0.5;
+				if (enable_debug) {
+					printf("Learning rate reduced to %f\n", learning_rate);
+				}
+			}
+			mean *= learning_rate;
+			mean_last = mean;
+			if (enable_debug) {
+				printf("Mean offset = %f\n", mean);
+			}
+		}
+		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
+			double position_Y_current = position_Y_tmp[current_particle] + position_Y_offset_array[current_particle] * learning_rate;
+			double position_X_current = position_X_tmp[current_particle] + position_X_offset_array[current_particle] * learning_rate;
 
 			// Shake
 			if (unlikely(shake)) {
-				position_X_offset += shake_tmp1;
-				position_Y_offset += shake_tmp1;
+				position_Y_current += shake_tmp1;
+				position_X_current += shake_tmp1;
 			}
 
 			// Result (new position of particles)
-			position_Y_current += position_X_offset;
-			position_X_current += position_Y_offset;
 			position_Y_current -= floor(position_Y_current / (double)rows) * (double)rows;
 			position_X_current -= floor(position_X_current / (double)cols) * (double)cols;
+			position_Y[current_particle] = position_Y_current;
+			position_X[current_particle] = position_X_current;
 
 			// Output
 			dst->data[(int)position_Y_current * cols + (int)position_X_current] = 0;
-
-			position_Y[current_particle] = position_Y_current;
-			position_X[current_particle] = position_X_current;
 		}
 
 		if (enable_debug) {
@@ -213,6 +250,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 	free(image_in);
 	free(position_Y);
 	free(position_X);
+	free(position_Y_offset_array);
+	free(position_X_offset_array);
 	free(position_Y_tmp);
 	free(position_X_tmp);
 	free(distance_X_array);
