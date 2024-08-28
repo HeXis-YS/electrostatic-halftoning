@@ -90,16 +90,19 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			shake_tmp1 = shake_tmp * exp(iterations / 1000.0);
 		}
 		for (int NowCharge = 0; NowCharge < Particle; NowCharge++) {
-			double NewPosition_Y = 0, NewPosition_X = 0;
+			double NewPosition_Y = 0;
+			double NewPosition_X = 0;
+			double position_Y_current = Particle_Y[NowCharge];
+			double position_X_current = Particle_X[NowCharge];
 
 			// Attraction
 			for (int x = 0; x < cols; x++) {
-				double distance_X = x + 0.5 - Particle_X[NowCharge];
+				double distance_X = x + 0.5 - position_X_current;
 				distance_X_array[x] = distance_X;
 				distance_X_2_array[x] = distance_X * distance_X;
 			}
 			for (int y = 0, p = 0; y < rows; y++) {
-				double distance_Y = y + 0.5 - Particle_Y[NowCharge];
+				double distance_Y = y + 0.5 - position_Y_current;
 				double distance_Y_2 = distance_Y * distance_Y;
 				for (int x = 0; x < cols; x++, p++) {
 					if (image_in[p] == 0.0) {
@@ -117,8 +120,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			// Repulsion
 			for (int OtherCharge = 0; OtherCharge < Particle; OtherCharge++) {
 				if (NowCharge != OtherCharge) {
-					double distance_Y = Particle_Y[OtherCharge] - Particle_Y[NowCharge];
-					double distance_X = Particle_X[OtherCharge] - Particle_X[NowCharge];
+					double distance_Y = Particle_Y[OtherCharge] - position_Y_current;
+					double distance_X = Particle_X[OtherCharge] - position_X_current;
 					double tmp = 0.0;
 					if (distance_Y != 0.0) {
 						tmp += distance_Y * distance_Y;
@@ -140,8 +143,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 			// Add GridForce to find discrete particle locations
 			if (GridForce) {
-				double grid_distance_Y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
-				double grid_distance_X = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
+				double grid_distance_Y = position_Y_current - (int)position_Y_current;
+				double grid_distance_X = position_X_current - (int)position_X_current;
 				double tmp = 0.0;
 				if (grid_distance_Y != 0.0) {
 					grid_distance_Y = (grid_distance_Y < 0.5) ? -grid_distance_Y : 1 - grid_distance_Y;
@@ -163,21 +166,26 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 				}
 			}
 
-			// Result (new position of particles)
-			Particle_Y[NowCharge] += 0.1 * NewPosition_Y;
-			Particle_X[NowCharge] += 0.1 * NewPosition_X;
+			NewPosition_Y *= 0.1;
+			NewPosition_X *= 0.1;
 
 			// Shake
 			if (Shake == 1 && Iterations > 64 && iterations % 10 == 0) {
-				Particle_Y[NowCharge] += shake_tmp1;
-				Particle_X[NowCharge] += shake_tmp1;
+				NewPosition_Y += shake_tmp1;
+				NewPosition_X += shake_tmp1;
 			}
 
-			Particle_Y[NowCharge] = Particle_Y[NowCharge] - floor(Particle_Y[NowCharge] / (double)rows) * (double)rows;
-			Particle_X[NowCharge] = Particle_X[NowCharge] - floor(Particle_X[NowCharge] / (double)cols) * (double)cols;
+			// Result (new position of particles)
+			position_Y_current += NewPosition_Y;
+			position_X_current += NewPosition_X;
+			position_Y_current -= floor(position_Y_current / (double)rows) * (double)rows;
+			position_X_current -= floor(position_X_current / (double)cols) * (double)cols;
 
 			// Output
-			dst->data[(int)Particle_Y[NowCharge] * cols + (int)Particle_X[NowCharge]] = 0;
+			dst->data[(int)position_Y_current * cols + (int)position_X_current] = 0;
+
+			Particle_Y[NowCharge] = position_Y_current;
+			Particle_X[NowCharge] = position_X_current;
 		}
 
 		if (Debug) {
