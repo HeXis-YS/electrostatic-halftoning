@@ -195,9 +195,11 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 		}
 	}
 
-	// dst = dst->clone();
-
 	free(image_in);
+	free(Particle_Y);
+	free(Particle_X);
+	free(distance_X_array);
+	free(distance_X_2_array);
 
 	return 0;
 }
