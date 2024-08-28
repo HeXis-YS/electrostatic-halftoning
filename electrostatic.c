@@ -78,7 +78,6 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 	//////////////////////////////////////////////////////////////////////////
 	///// process
-	double instead_y, instead_x;
 	int Particle = particle_count;
 	double *distance_X_array = (double *)malloc(sizeof(double) * cols);
 	double *distance_X_2_array = (double *)malloc(sizeof(double) * cols);
@@ -114,11 +113,23 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			// Repulsion
 			for (int OtherCharge = 0; OtherCharge < Particle; OtherCharge++) {
 				if (NowCharge != OtherCharge) {
-					instead_y = Particle_Y[OtherCharge] - Particle_Y[NowCharge];
-					instead_x = Particle_X[OtherCharge] - Particle_X[NowCharge];
-					if (!(instead_y == 0 && instead_x == 0)) {
-						NewPosition_Y -= instead_y / (instead_y * instead_y + instead_x * instead_x);
-						NewPosition_X -= instead_x / (instead_y * instead_y + instead_x * instead_x);
+					double distance_Y = Particle_Y[OtherCharge] - Particle_Y[NowCharge];
+					double distance_X = Particle_X[OtherCharge] - Particle_X[NowCharge];
+					double tmp = 0.0;
+					if (distance_Y != 0.0) {
+						tmp += distance_Y * distance_Y;
+					}
+					if (distance_X != 0.0) {
+						tmp += distance_X * distance_X;
+					}
+					if (tmp != 0) {
+						tmp = 1.0 / tmp;
+						if (distance_Y != 0.0) {
+							NewPosition_Y -= distance_Y * tmp;
+						}
+						if (distance_X != 0.0) {
+							NewPosition_X -= distance_X * tmp;
+						}
 					}
 				}
 			}
