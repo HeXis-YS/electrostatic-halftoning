@@ -81,9 +81,13 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	int Particle = particle_count;
 	double *distance_X_array = (double *)malloc(sizeof(double) * cols);
 	double *distance_X_2_array = (double *)malloc(sizeof(double) * cols);
+	double shake_tmp = log10((double)Iterations) / log10(1024.0) - 0.6;
+	double shake_tmp1 = 0.0;
 	for (int iterations = 1; iterations <= Iterations; iterations++) {
 		printf("Iterations %d\n", iterations);
-
+		if (Shake == 1 && Iterations > 64 && iterations % 10 == 0) {
+			shake_tmp1 = shake_tmp * exp(iterations / 1000.0);
+		}
 		for (int NowCharge = 0; NowCharge < Particle; NowCharge++) {
 			double NewPosition_Y = 0, NewPosition_X = 0;
 
@@ -163,9 +167,9 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			Particle_X[NowCharge] += 0.1 * NewPosition_X;
 
 			// Shake
-			if (Shake == 1 && iterations % 10 == 0 && Iterations > 64) {
-				Particle_Y[NowCharge] += (log10((double)Iterations) / log10(2.0) - 6) * exp(iterations / 1000.0) / 10;
-				Particle_X[NowCharge] += (log10((double)Iterations) / log10(2.0) - 6) * exp(iterations / 1000.0) / 10;
+			if (Shake == 1 && Iterations > 64 && iterations % 10 == 0) {
+				Particle_Y[NowCharge] += shake_tmp1;
+				Particle_X[NowCharge] += shake_tmp1;
 			}
 
 			if (Particle_Y[NowCharge] < 0) {
