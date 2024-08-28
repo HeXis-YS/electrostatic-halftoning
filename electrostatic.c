@@ -85,6 +85,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 	double shake_tmp1 = 0.0;
 	for (int iterations = 1; iterations <= Iterations; iterations++) {
 		printf("Iterations %d\n", iterations);
+		memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
 		if (Shake == 1 && Iterations > 64 && iterations % 10 == 0) {
 			shake_tmp1 = shake_tmp * exp(iterations / 1000.0);
 		}
@@ -174,23 +175,9 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 			Particle_Y[NowCharge] = Particle_Y[NowCharge] - floor(Particle_Y[NowCharge] / (double)rows) * (double)rows;
 			Particle_X[NowCharge] = Particle_X[NowCharge] - floor(Particle_X[NowCharge] / (double)cols) * (double)cols;
-		}
 
-		// Output
-		memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
-		int output_position;
-		int out_Y, out_X;
-		double count_errorY = 0, count_errorX = 0;
-		for (int NowCharge = 0; NowCharge < Particle; NowCharge++) {
-			out_Y = Particle_Y[NowCharge] + 0.5;
-			out_X = Particle_X[NowCharge] + 0.5;
-			if (out_Y >= rows) {
-				out_Y = rows - 1;
-			}
-			if (out_X >= cols) {
-				out_X = cols - 1;
-			}
-			dst->data[out_Y * cols + out_X] = 0;
+			// Output
+			dst->data[(int)Particle_Y[NowCharge] * cols + (int)Particle_X[NowCharge]] = 0;
 		}
 
 		if (Debug) {
