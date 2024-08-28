@@ -134,8 +134,6 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			}
 
 			// Add GridForce to find discrete particle locations
-			double GridForce_Y = 0.0;
-			double GridForce_X = 0.0;
 			if (GridForce) {
 				double grid_distance_Y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
 				double grid_distance_X = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
@@ -152,22 +150,17 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 					tmp = sqrt(tmp);
 					tmp = 3.5 / (tmp + 10000 * pow(tmp, 9));
 					if (grid_distance_Y != 0) {
-						GridForce_Y = grid_distance_Y * tmp;
+						NewPosition_Y += grid_distance_Y * tmp;
 					}
 					if (grid_distance_X != 0) {
-						GridForce_X = grid_distance_X * tmp;
+						NewPosition_Y += grid_distance_X * tmp;
 					}
 				}
 			}
 
-			// resault (new position of particles)
-			if (GridForce == 0) {
-				Particle_Y[NowCharge] = Particle_Y[NowCharge] + 0.1 * NewPosition_Y;
-				Particle_X[NowCharge] = Particle_X[NowCharge] + 0.1 * NewPosition_X;
-			} else if (GridForce == 1) {
-				Particle_Y[NowCharge] = Particle_Y[NowCharge] + 0.1 * (NewPosition_Y + GridForce_Y);
-				Particle_X[NowCharge] = Particle_X[NowCharge] + 0.1 * (NewPosition_X + GridForce_X);
-			}
+			// Result (new position of particles)
+			Particle_Y[NowCharge] += 0.1 * NewPosition_Y;
+			Particle_X[NowCharge] += 0.1 * NewPosition_X;
 
 			// Shake
 			if (Shake == 1 && iterations % 10 == 0 && Iterations > 64) {
