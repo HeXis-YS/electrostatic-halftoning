@@ -82,6 +82,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 	double *position_X_tmp = (double *)malloc(sizeof(double) * particle_count);
 	double *distance_X_array = (double *)malloc(sizeof(double) * cols);
 	double *distance_X_2_array = (double *)malloc(sizeof(double) * cols);
+	int shake = 0;
 	double shake_tmp = log10((double)max_iterations) / log10(1024.0) - 0.6;
 	double shake_tmp1 = 0.0;
 	for (int current_iteration = 1; current_iteration <= max_iterations; current_iteration++) {
@@ -89,8 +90,13 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 		memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
 		memcpy(position_Y_tmp, position_Y, sizeof(double) * particle_count);
 		memcpy(position_X_tmp, position_X, sizeof(double) * particle_count);
-		if (enable_shake == 1 && max_iterations > 64 && current_iteration % 10 == 0) {
-			shake_tmp1 = shake_tmp * exp(current_iteration / 1000.0);
+		if (enable_shake) {
+			if (current_iteration % 10 == 0) {
+				shake_tmp1 = shake_tmp * exp(current_iteration / 1000.0);
+				shake = 1;
+			} else {
+				shake = 0;
+			}
 		}
 		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
 			double position_X_offset = 0.0;
@@ -174,7 +180,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int enable_in
 			position_Y_offset *= 0.1;
 
 			// Shake
-			if (enable_shake == 1 && max_iterations > 64 && current_iteration % 10 == 0) {
+			if (shake) {
 				position_X_offset += shake_tmp1;
 				position_Y_offset += shake_tmp1;
 			}
