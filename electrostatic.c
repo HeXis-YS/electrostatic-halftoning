@@ -172,18 +172,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 				Particle_X[NowCharge] += shake_tmp1;
 			}
 
-			if (Particle_Y[NowCharge] < 0) {
-				Particle_Y[NowCharge] = 0;
-			}
-			if (Particle_Y[NowCharge] >= rows) {
-				Particle_Y[NowCharge] = rows - 1;
-			}
-			if (Particle_X[NowCharge] < 0) {
-				Particle_X[NowCharge] = 0;
-			}
-			if (Particle_X[NowCharge] >= cols) {
-				Particle_X[NowCharge] = cols - 1;
-			}
+			Particle_Y[NowCharge] = Particle_Y[NowCharge] - floor(Particle_Y[NowCharge] / (double)rows) * (double)rows;
+			Particle_X[NowCharge] = Particle_X[NowCharge] - floor(Particle_X[NowCharge] / (double)cols) * (double)cols;
 		}
 
 		// Output
