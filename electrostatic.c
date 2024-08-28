@@ -86,7 +86,6 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 
 		for (int NowCharge = 0; NowCharge < Particle; NowCharge++) {
 			double NewPosition_Y = 0, NewPosition_X = 0;
-			double GridForce_Y = 0, GridForce_X = 0;
 
 			// Attraction
 			for (int x = 0; x < cols; x++) {
@@ -135,39 +134,29 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int InitialCh
 			}
 
 			// Add GridForce to find discrete particle locations
-			double real_y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
-			double real_x = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
-			if (real_y == 0 && real_x == 0) {
-				GridForce_Y = 0;
-				GridForce_X = 0;
-			} else {
-				if (real_y < 0.5) {
-					if (real_x < 0.5) {
-						real_y = (0 - real_y);
-						real_x = (0 - real_x);
-					} else {
-						real_y = (0 - real_y);
-						real_x = (1 - real_x);
-					}
-				} else {
-					if (real_x < 0.5) {
-						real_y = (1 - real_y);
-						real_x = (0 - real_x);
-					} else {
-						real_y = (1 - real_y);
-						real_x = (1 - real_x);
-					}
+			double GridForce_Y = 0.0;
+			double GridForce_X = 0.0;
+			if (GridForce) {
+				double grid_distance_Y = Particle_Y[NowCharge] - (int)Particle_Y[NowCharge];
+				double grid_distance_X = Particle_X[NowCharge] - (int)Particle_X[NowCharge];
+				double tmp = 0.0;
+				if (grid_distance_Y != 0.0) {
+					grid_distance_Y = (grid_distance_Y < 0.5) ? -grid_distance_Y : 1 - grid_distance_Y;
+					tmp += grid_distance_Y * grid_distance_Y;
 				}
-				double vector3 = sqrt(real_y * real_y + real_x * real_x);
-				if (real_y == 0) {
-					GridForce_Y = 0;
-				} else {
-					GridForce_Y = 3.5 * real_y / (vector3 * (1 + pow(vector3, 8) * 10000));
+				if (grid_distance_X != 0.0) {
+					grid_distance_X = (grid_distance_X < 0.5) ? -grid_distance_X : 1 - grid_distance_X;
+					tmp += grid_distance_X * grid_distance_X;
 				}
-				if (real_x == 0) {
-					GridForce_X = 0;
-				} else {
-					GridForce_X = 3.5 * real_x / (vector3 * (1 + pow(vector3, 8) * 10000));
+				if (tmp != 0.0) {
+					tmp = sqrt(tmp);
+					tmp = 3.5 / (tmp + 10000 * pow(tmp, 9));
+					if (grid_distance_Y != 0) {
+						GridForce_Y = grid_distance_Y * tmp;
+					}
+					if (grid_distance_X != 0) {
+						GridForce_X = grid_distance_X * tmp;
+					}
 				}
 			}
 
