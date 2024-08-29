@@ -9,6 +9,10 @@
 #define likely(x) __builtin_expect(x, 1)
 #define unlikely(x) __builtin_expect(x, 0)
 
+static double rand_double() {
+	return (double)rand() / ((double)RAND_MAX + 1.0);
+}
+
 int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int max_iterations, int enable_initial_charge, int enable_gridforce, int enable_shake, int enable_adaptive_learning_rate, int enable_debug) {
 	//////////////////////////////////////////////////////////////////////////
 	///// exceptions
@@ -75,12 +79,12 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int max_itera
 		int rand_Y = rand() % rows;
 		int rand_X = rand() % cols;
 		int p = rand_Y * cols + rand_X;
-		if (dst->data[p] == 0 || (enable_initial_charge && rand() % 256 <= src.data[p])) {
+		if (enable_initial_charge && rand() % 256 <= src.data[p]) {
 			continue;
 		}
 		dst->data[p] = 0;
-		position_Y[particle] = (double)rand_Y + 0.5;
-		position_X[particle] = (double)rand_X + 0.5;
+		position_Y[particle] = (double)rand_Y + rand_double();
+		position_X[particle] = (double)rand_X + rand_double();
 		particle++;
 	}
 	if (enable_debug) {
