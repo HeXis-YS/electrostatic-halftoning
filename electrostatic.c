@@ -13,7 +13,15 @@ static double rand_double() {
 	return (double)rand() / ((double)RAND_MAX + 1.0);
 }
 
-int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int max_iterations, int enable_initial_charge, int enable_gridforce, int enable_shake, int enable_adaptive_learning_rate, int enable_debug) {
+int ElectrostaticHalftoning2010(struct CMat src,
+								struct CMat *dst,
+								int max_iterations,
+								int enable_initial_charge,
+								int enable_gridforce,
+								int enable_shake,
+								int enable_adaptive_learning_rate,
+								int enable_early_stop,
+								int enable_debug) {
 	//////////////////////////////////////////////////////////////////////////
 	///// exceptions
 	// For backward compatibility
@@ -30,21 +38,24 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int max_itera
 	} else if (enable_adaptive_learning_rate != 0 && enable_adaptive_learning_rate != 1) {
 		printf("Error: enable_adaptive_learning_rate = {0, 1}\n");
 		error = 4;
+	} else if (enable_early_stop < 0) {
+		printf("Error: enable_early_stop >= 0\n");
+		error = 5;
 	} else if (enable_debug != 0 && enable_debug != 1) {
 		printf("Error: enable_debug = {0, 1}\n");
-		error = 5;
+		error = 6;
 	} else {
 		if (enable_shake == 1) {
 			if (max_iterations <= 64) {
 				printf("Error: max_iterations > 64, when enable_shake = 1\n");
-				error = 6;
+				error = 7;
 			} else if (enable_adaptive_learning_rate == 1) {
 				printf("Error: max_iterations != 1, when enable_shake = 1\n");
-				error = 7;
+				error = 8;
 			}
 		} else if (enable_shake != 0) {
 			printf("Error: enable_shake = {0, 1}\n");
-			error = 8;
+			error = 9;
 		}
 	}
 	if (error) {
@@ -93,6 +104,8 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int max_itera
 
 	//////////////////////////////////////////////////////////////////////////
 	///// process
+	unsigned char *image_last = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
+	int early_stop_counter = 0;
 	double *position_Y_tmp = (double *)malloc(sizeof(double) * particle_count);
 	double *position_X_tmp = (double *)malloc(sizeof(double) * particle_count);
 	double *distance_X_array = (double *)malloc(sizeof(double) * cols);
@@ -110,6 +123,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int max_itera
 	}
 	for (int current_iteration = 1; current_iteration <= max_iterations; current_iteration++) {
 		printf("Iteration %d\n", current_iteration);
+		memcpy(image_last, dst->data, sizeof(unsigned char) * pixel_count);
 		memset(dst->data, 255, sizeof(unsigned char) * pixel_count);
 		memcpy(position_Y_tmp, position_Y, sizeof(double) * particle_count);
 		memcpy(position_X_tmp, position_X, sizeof(double) * particle_count);
@@ -243,7 +257,18 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int max_itera
 			// Output
 			dst->data[(int)position_Y_current * cols + (int)position_X_current] = 0;
 		}
-
+		if (enable_early_stop) {
+			if (memcmp(dst->data, image_last, sizeof(unsigned char) * pixel_count) == 0){
+				early_stop_counter++;
+				printf("Result unchanged for %d iterations.\n", early_stop_counter);
+				if (early_stop_counter >= enable_early_stop) {
+					printf("Early stop.\n");
+					break;
+				}
+			} else {
+				early_stop_counter = 0;
+			}
+		}
 		if (enable_debug) {
 			char out_file[50];
 			sprintf(out_file, ".\\output\\%d.bmp", current_iteration);
@@ -252,6 +277,7 @@ int ElectrostaticHalftoning2010(struct CMat src, struct CMat *dst, int max_itera
 	}
 
 	free(image_in);
+	free(image_last);
 	free(position_Y);
 	free(position_X);
 	free(position_Y_offset_array);
