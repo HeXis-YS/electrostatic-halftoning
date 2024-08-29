@@ -24,42 +24,31 @@ int ElectrostaticHalftoning2010(struct CMat src,
 								int enable_debug) {
 	//////////////////////////////////////////////////////////////////////////
 	///// exceptions
-	// For backward compatibility
-	int error = 0;
-	if (max_iterations < 0) {
-		printf("Error: max_iterations >= 0\n");
-		error = 1;
-	} else if (enable_initial_charge != 0 && enable_initial_charge != 1) {
-		printf("Error: enable_initial_charge = {0, 1}\n");
-		error = 2;
-	} else if (enable_gridforce != 0 && enable_gridforce != 1) {
-		printf("Error: enable_gridforce = {0, 1}\n");
-		error = 3;
-	} else if (enable_adaptive_learning_rate != 0 && enable_adaptive_learning_rate != 1) {
-		printf("Error: enable_adaptive_learning_rate = {0, 1}\n");
-		error = 4;
-	} else if (enable_early_stop < 0) {
-		printf("Error: enable_early_stop >= 0\n");
-		error = 5;
-	} else if (enable_debug != 0 && enable_debug != 1) {
-		printf("Error: enable_debug = {0, 1}\n");
-		error = 6;
-	} else {
-		if (enable_shake == 1) {
-			if (max_iterations <= 64) {
-				printf("Error: max_iterations > 64, when enable_shake = 1\n");
-				error = 7;
-			} else if (enable_adaptive_learning_rate == 1) {
-				printf("Error: max_iterations != 1, when enable_shake = 1\n");
-				error = 8;
-			}
-		} else if (enable_shake != 0) {
-			printf("Error: enable_shake = {0, 1}\n");
-			error = 9;
+	max_iterations = (max_iterations > 0) ? max_iterations : 8;
+	enable_initial_charge = enable_initial_charge ? 1 : 0;
+	enable_gridforce = enable_gridforce ? 1 : 0;
+	enable_shake = enable_shake ? 1 : 0;
+	enable_adaptive_learning_rate = enable_adaptive_learning_rate ? 1 : 0;
+	enable_early_stop = enable_early_stop ? enable_early_stop : 0;
+	enable_debug = enable_debug ? 1 : 0;
+	printf("Max iterations = %d\n", max_iterations);
+	printf("Initial charge = %s\n", enable_initial_charge ? "Enabled" : "Disabled");
+	printf("Grid Force = %s\n", enable_gridforce ? "Enabled" : "Disabled");
+	printf("Shake = %s\n", enable_shake ? "Enabled" : "Disabled");
+	printf("Adaptive learning rate = %s\n", enable_adaptive_learning_rate ? "Enabled" : "Disabled");
+	printf("Early stop = ");
+	enable_early_stop ? printf("%d iterations.\n", enable_early_stop) : printf("Disabled.\n");
+	if (enable_shake) {
+		if (max_iterations <= 64) {
+			printf("Error: max_iterations > 64, when enable_shake = 1\n");
+			return 1;
+		} else if (enable_adaptive_learning_rate) {
+			printf("Error: max_iterations != 1, when enable_shake = 1\n");
+			return 2;
 		}
 	}
-	if (error) {
-		return error;
+	if (enable_adaptive_learning_rate && enable_gridforce) {
+		printf("Warning: Not recommended for use with grid force with adaptive learning rate.\n");
 	}
 
 	int rows = src.rows;
