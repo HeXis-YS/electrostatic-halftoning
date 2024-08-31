@@ -42,9 +42,9 @@ int ElectrostaticHalftoning2010(struct CMat src,
 		if (max_iterations <= 64) {
 			printf("Error: max_iterations > 64, when enable_shake = 1\n");
 			return 1;
-		} else if (enable_adaptive_learning_rate) {
-			printf("Error: max_iterations != 1, when enable_shake = 1\n");
-			return 2;
+		// } else if (enable_adaptive_learning_rate) {
+		// 	printf("Error: max_iterations != 1, when enable_shake = 1\n");
+		// 	return 2;
 		}
 	}
 	if (enable_adaptive_learning_rate && enable_gridforce) {
@@ -94,32 +94,36 @@ int ElectrostaticHalftoning2010(struct CMat src,
 
 	//////////////////////////////////////////////////////////////////////////
 	///// process
-	// Early stop
-	unsigned char *image_last = NULL;
-	int early_stop_counter = 0;
-	if (enable_early_stop) {
-		image_last = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
-	}
 	double *particle_Y_last = (double *)malloc(sizeof(double) * particle_count);
 	double *particle_X_last = (double *)malloc(sizeof(double) * particle_count);
 	double *distance_X = (double *)malloc(sizeof(double) * cols);
 	double *distance_X_2 = (double *)malloc(sizeof(double) * cols);
 	double *force_Y_array = (double *)malloc(sizeof(double) * particle_count);
 	double *force_X_array = (double *)malloc(sizeof(double) * particle_count);
+	// Shake
 	int shake = 0;
-	double shake_tmp = log10((double)max_iterations) / log10(1024.0) - 0.6;
-	double shake_tmp1 = 0.0;
+	double shake_tmp;
+	double shake_tmp1;
+	if (enable_shake) {
+		shake_tmp = log10((double)max_iterations) / log10(1024.0) - 0.6;
+		shake_tmp1 = 0.0;
+	}
+	// Adaptive learning rate
 	double learning_rate = 0.1;
 	double mean = 0.0;
 	double mean_last = DBL_MAX;
+	// Early stop
+	unsigned char *image_last = NULL;
+	int early_stop_counter = 0;
+	if (enable_early_stop) {
+		image_last = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
+	}
+
 	if (enable_debug) {
 		printf("Initial learning rate = %f\n", learning_rate);
 	}
 	for (int current_iteration = 1; current_iteration <= max_iterations; current_iteration++) {
 		printf("Iteration %d\n", current_iteration);
-		if (enable_early_stop) {
-			memcpy(image_last, image_dst, sizeof(unsigned char) * pixel_count);
-		}
 		memset(image_dst, 255, sizeof(unsigned char) * pixel_count);
 		memcpy(particle_Y_last, particle_Y, sizeof(double) * particle_count);
 		memcpy(particle_X_last, particle_X, sizeof(double) * particle_count);
@@ -136,15 +140,19 @@ int ElectrostaticHalftoning2010(struct CMat src,
 		if (enable_adaptive_learning_rate) {
 			mean = 0.0;
 		}
+		if (enable_early_stop) {
+			memcpy(image_last, image_dst, sizeof(unsigned char) * pixel_count);
+		}
 		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
 			double force_Y = 0.0;
 			double force_X = 0.0;
 			double particle_Y_current = particle_Y_last[current_particle];
 			double particle_X_current = particle_X_last[current_particle];
+			double tmp;
 
 			// Attraction
 			for (int x = 0; x < cols; x++) {
-				double tmp = x + 0.5 - particle_X_current;
+				tmp = x + 0.5 - particle_X_current;
 				distance_X[x] = tmp;
 				distance_X_2[x] = tmp * tmp;
 			}
@@ -152,11 +160,10 @@ int ElectrostaticHalftoning2010(struct CMat src,
 				double distance_Y = y + 0.5 - particle_Y_current;
 				double distance_Y_2 = distance_Y * distance_Y;
 				for (int x = 0; x < cols; x++, p++) {
-					double image_in_tmp = image_in[p];
 					if (unlikely(image_in[p] == 0.0)) {
 						continue;
 					}
-					double tmp = distance_Y_2 + distance_X_2[x];
+					tmp = distance_Y_2 + distance_X_2[x];
 					if (likely(tmp != 0.0)) {
 						tmp = image_in[p] / tmp;
 						force_Y += distance_Y * tmp;
@@ -169,7 +176,7 @@ int ElectrostaticHalftoning2010(struct CMat src,
 			for (int particle = current_particle + 1; particle < particle_count; particle++) {
 				double distance_Y = particle_Y_last[particle] - particle_Y_current;
 				double distance_X = particle_X_last[particle] - particle_X_current;
-				double tmp = 0.0;
+				tmp = 0.0;
 				if (likely(distance_Y != 0.0)) {
 					tmp += distance_Y * distance_Y;
 				}
@@ -178,15 +185,16 @@ int ElectrostaticHalftoning2010(struct CMat src,
 				}
 				if (likely(tmp != 0.0)) {
 					tmp = 1.0 / tmp;
+					double repulsion_force;
 					if (likely(distance_Y != 0.0)) {
-						double repulsion_Y = distance_Y * tmp;
-						force_Y -= repulsion_Y;
-						force_Y_array[particle] += repulsion_Y;
+						repulsion_force = distance_Y * tmp;
+						force_Y -= repulsion_force;
+						force_Y_array[particle] += repulsion_force;
 					}
 					if (likely(distance_X != 0.0)) {
-						double repulsion_X = distance_X * tmp;
-						force_X -= repulsion_X;
-						force_X_array[particle] += repulsion_X;
+						repulsion_force = distance_X * tmp;
+						force_X -= repulsion_force;
+						force_X_array[particle] += repulsion_force;
 					}
 				}
 			}
@@ -195,7 +203,7 @@ int ElectrostaticHalftoning2010(struct CMat src,
 			if (enable_gridforce) {
 				double grid_distance_Y = particle_Y_current - (int)particle_Y_current;
 				double grid_distance_X = particle_X_current - (int)particle_X_current;
-				double tmp = 0.0;
+				tmp = 0.0;
 				if (likely(grid_distance_Y != 0.0)) {
 					grid_distance_Y = possibility(grid_distance_Y <= 0.5, 0.5) ? -grid_distance_Y : 1 - grid_distance_Y;
 					tmp += grid_distance_Y * grid_distance_Y;
@@ -216,14 +224,16 @@ int ElectrostaticHalftoning2010(struct CMat src,
 				}
 			}
 
-			force_Y_array[current_particle] += force_Y;
-			force_X_array[current_particle] += force_X;
+			force_Y += force_Y_array[current_particle];
+			force_X += force_X_array[current_particle];
+			force_Y_array[current_particle] = force_Y;
+			force_X_array[current_particle] = force_X;
 
-			if (enable_adaptive_learning_rate) {
-				mean += sqrt(force_Y_array[current_particle] * force_Y_array[current_particle] + force_X_array[current_particle] * force_X_array[current_particle]);
+			if (enable_debug | enable_adaptive_learning_rate) {
+				mean += sqrt(force_Y * force_Y + force_X * force_X);
 			}
 		}
-		if (enable_adaptive_learning_rate) {
+		if (enable_debug | enable_adaptive_learning_rate) {
 			mean /= (double)particle_count;
 			while (mean * learning_rate >= mean_last) {
 				learning_rate *= 0.5;
@@ -250,6 +260,9 @@ int ElectrostaticHalftoning2010(struct CMat src,
 
 			// Output
 			image_dst[(int)particle_Y_current * cols + (int)particle_X_current] = 0;
+		}
+		if (enable_debug && shake) {
+			printf("Shake performed (%f)\n", shake_tmp1);
 		}
 		if (enable_early_stop) {
 			if (memcmp(image_dst, image_last, sizeof(unsigned char) * pixel_count) == 0) {
