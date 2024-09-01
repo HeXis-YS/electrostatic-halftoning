@@ -19,7 +19,6 @@ int ElectrostaticHalftoning2010(struct CMat src,
 								int enable_initial_charge,
 								int enable_gridforce,
 								int enable_shake,
-								int enable_adaptive_learning_rate,
 								int enable_early_stop,
 								int enable_debug) {
 	//////////////////////////////////////////////////////////////////////////
@@ -28,29 +27,18 @@ int ElectrostaticHalftoning2010(struct CMat src,
 	enable_initial_charge = enable_initial_charge ? 1 : 0;
 	enable_gridforce = enable_gridforce ? 1 : 0;
 	enable_shake = enable_shake ? 1 : 0;
-	enable_adaptive_learning_rate = enable_adaptive_learning_rate ? 1 : 0;
 	enable_early_stop = enable_early_stop ? enable_early_stop : 0;
 	enable_debug = enable_debug ? 1 : 0;
 	printf("Max iterations = %d\n", max_iterations);
 	printf("Initial charge = %s\n", enable_initial_charge ? "Enabled" : "Disabled");
 	printf("Grid Force = %s\n", enable_gridforce ? "Enabled" : "Disabled");
 	printf("Shake = %s\n", enable_shake ? "Enabled" : "Disabled");
-	printf("Adaptive learning rate = %s\n", enable_adaptive_learning_rate ? "Enabled" : "Disabled");
 	printf("Early stop = ");
 	enable_early_stop ? printf("%d iterations.\n", enable_early_stop) : printf("Disabled.\n");
-	if (enable_shake) {
-		if (max_iterations <= 64) {
-			printf("Error: max_iterations > 64, when enable_shake = 1\n");
-			return 1;
-		// } else if (enable_adaptive_learning_rate) {
-		// 	printf("Error: max_iterations != 1, when enable_shake = 1\n");
-		// 	return 2;
-		}
+	if (enable_shake && max_iterations <= 64) {
+		printf("Error: max_iterations > 64, when enable_shake = 1\n");
+		return 1;
 	}
-	if (enable_adaptive_learning_rate && enable_gridforce) {
-		printf("Warning: Not recommended for use with grid force with adaptive learning rate.\n");
-	}
-
 	int rows = src.rows;
 	int cols = src.cols;
 	int pixel_count = rows * cols;
@@ -108,19 +96,17 @@ int ElectrostaticHalftoning2010(struct CMat src,
 		shake_tmp = log10((double)max_iterations) / log10(1024.0) - 0.6;
 		shake_tmp1 = 0.0;
 	}
-	// Adaptive learning rate
-	double learning_rate = 0.1;
-	double mean = 0.0;
-	double mean_last = DBL_MAX;
+	// Time step
+	double time_step = 0.1;
+	double mean;
 	// Early stop
 	unsigned char *image_last = NULL;
 	int early_stop_counter = 0;
 	if (enable_early_stop) {
 		image_last = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
 	}
-
 	if (enable_debug) {
-		printf("Initial learning rate = %f\n", learning_rate);
+		printf("Initial time step = %f\n", time_step);
 	}
 	for (int current_iteration = 1; current_iteration <= max_iterations; current_iteration++) {
 		printf("Iteration %d\n", current_iteration);
@@ -137,7 +123,7 @@ int ElectrostaticHalftoning2010(struct CMat src,
 				shake = 0;
 			}
 		}
-		if (enable_adaptive_learning_rate) {
+		if (enable_debug) {
 			mean = 0.0;
 		}
 		if (enable_early_stop) {
@@ -164,11 +150,9 @@ int ElectrostaticHalftoning2010(struct CMat src,
 						continue;
 					}
 					tmp = distance_Y_2 + distance_X_2[x];
-					if (likely(tmp != 0.0)) {
-						tmp = image_in[p] / tmp;
-						force_Y += distance_Y * tmp;
-						force_X += distance_X[x] * tmp;
-					}
+					tmp = (tmp <= 0.1) ? (image_in[p] * (20.0 - 100.0 * tmp)) : (image_in[p] / tmp);
+					force_Y += distance_Y * tmp;
+					force_X += distance_X[x] * tmp;
 				}
 			}
 
@@ -176,51 +160,28 @@ int ElectrostaticHalftoning2010(struct CMat src,
 			for (int particle = current_particle + 1; particle < particle_count; particle++) {
 				double distance_Y = particle_Y_last[particle] - particle_Y_current;
 				double distance_X = particle_X_last[particle] - particle_X_current;
-				tmp = 0.0;
-				if (likely(distance_Y != 0.0)) {
-					tmp += distance_Y * distance_Y;
-				}
-				if (likely(distance_X != 0.0)) {
-					tmp += distance_X * distance_X;
-				}
-				if (likely(tmp != 0.0)) {
-					tmp = 1.0 / tmp;
-					double repulsion_force;
-					if (likely(distance_Y != 0.0)) {
-						repulsion_force = distance_Y * tmp;
-						force_Y -= repulsion_force;
-						force_Y_array[particle] += repulsion_force;
-					}
-					if (likely(distance_X != 0.0)) {
-						repulsion_force = distance_X * tmp;
-						force_X -= repulsion_force;
-						force_X_array[particle] += repulsion_force;
-					}
-				}
+				tmp = distance_Y * distance_Y + distance_X * distance_X;
+				tmp = (tmp <= 0.1) ? (20.0 - 100.0 * tmp) : (1.0 / tmp);
+				double repulsion_force = distance_Y * tmp;
+				force_Y -= repulsion_force;
+				force_Y_array[particle] += repulsion_force;
+				repulsion_force = distance_X * tmp;
+				force_X -= repulsion_force;
+				force_X_array[particle] += repulsion_force;
 			}
 
 			// Add GridForce to find discrete particle locations
 			if (enable_gridforce) {
 				double grid_distance_Y = particle_Y_current - (int)particle_Y_current;
 				double grid_distance_X = particle_X_current - (int)particle_X_current;
-				tmp = 0.0;
-				if (likely(grid_distance_Y != 0.0)) {
-					grid_distance_Y = possibility(grid_distance_Y <= 0.5, 0.5) ? -grid_distance_Y : 1 - grid_distance_Y;
-					tmp += grid_distance_Y * grid_distance_Y;
-				}
-				if (likely(grid_distance_X != 0.0)) {
-					grid_distance_X = possibility(grid_distance_X <= 0.5, 0.5) ? -grid_distance_X : 1 - grid_distance_X;
-					tmp += grid_distance_X * grid_distance_X;
-				}
+				grid_distance_Y = possibility(grid_distance_Y <= 0.5, 0.5) ? -grid_distance_Y : 1 - grid_distance_Y;
+				grid_distance_X = possibility(grid_distance_X <= 0.5, 0.5) ? -grid_distance_X : 1 - grid_distance_X;
+				tmp = grid_distance_Y * grid_distance_Y + grid_distance_X * grid_distance_X;
 				if (likely(tmp != 0.0)) {
 					tmp = sqrt(tmp);
 					tmp = 3.5 / (tmp + 10000.0 * pow(tmp, 9.0));
-					if (likely(grid_distance_Y != 0.0)) {
-						force_Y += grid_distance_Y * tmp;
-					}
-					if (likely(grid_distance_X != 0.0)) {
-						force_X += grid_distance_X * tmp;
-					}
+					force_Y += grid_distance_Y * tmp;
+					force_X += grid_distance_X * tmp;
 				}
 			}
 
@@ -229,22 +190,17 @@ int ElectrostaticHalftoning2010(struct CMat src,
 			force_Y_array[current_particle] = force_Y;
 			force_X_array[current_particle] = force_X;
 
-			if (enable_debug | enable_adaptive_learning_rate) {
+			if (enable_debug) {
 				mean += sqrt(force_Y * force_Y + force_X * force_X);
 			}
 		}
-		if (enable_debug | enable_adaptive_learning_rate) {
+		if (enable_debug) {
 			mean /= (double)particle_count;
-			while (mean * learning_rate >= mean_last) {
-				learning_rate *= 0.5;
-				printf("Learning rate reduced to %f\n", learning_rate);
-			}
-			printf("Mean force/offset = %f/%f\n", mean, mean * learning_rate);
-			mean_last = mean * learning_rate;
+			printf("Mean force = %f\n", mean);
 		}
 		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
-			double particle_Y_current = particle_Y_last[current_particle] + force_Y_array[current_particle] * learning_rate;
-			double particle_X_current = particle_X_last[current_particle] + force_X_array[current_particle] * learning_rate;
+			double particle_Y_current = particle_Y_last[current_particle] + force_Y_array[current_particle] * time_step;
+			double particle_X_current = particle_X_last[current_particle] + force_X_array[current_particle] * time_step;
 
 			// Shake
 			if (shake) {
