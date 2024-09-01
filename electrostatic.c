@@ -13,15 +13,15 @@ static double rand_double() {
 	return (double)rand() / ((double)RAND_MAX + 1.0);
 }
 
-int ElectrostaticHalftoning2010(struct CMat src,
-								struct CMat *dst,
-								int color_depth,
-								int max_iterations,
-								int enable_initial_charge,
-								int enable_gridforce,
-								int enable_shake,
-								int enable_early_stop,
-								int enable_debug) {
+int electrostatic_halftoning(const char *src_path,
+							 const char *dst_path,
+							 int color_depth,
+							 int max_iterations,
+							 int enable_initial_charge,
+							 int enable_gridforce,
+							 int enable_shake,
+							 int enable_early_stop,
+							 int enable_debug) {
 	/* Exceptions */
 	max_iterations = (max_iterations > 0) ? max_iterations : 8;
 	enable_initial_charge = enable_initial_charge ? 1 : 0;
@@ -41,18 +41,24 @@ int ElectrostaticHalftoning2010(struct CMat src,
 	enable_early_stop ? printf("%d iterations.\n", enable_early_stop) : printf("Disabled.\n");
 	if (enable_shake && max_iterations <= 64) {
 		printf("Error: max_iterations > 64, when enable_shake = 1\n");
-		return 2;
+		return 1;
 	}
 
+	// Load image
+	struct CMat src;
+	if (cv_imread(src_path, &src) == 0) {
+		return 2;
+	}
 	const int rows = src.rows;
 	const int cols = src.cols;
 	const int pixel_count = rows * cols;
 	double *image_in = (double *)malloc(sizeof(double) * pixel_count);
 	unsigned char *image_dst = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
 	unsigned char *image_level = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
-	dst->rows = rows;
-	dst->cols = cols;
-	dst->data = image_dst;
+	struct CMat dst;
+	dst.rows = rows;
+	dst.cols = cols;
+	dst.data = image_dst;
 
 	/* Color Depth */
 	const int pixel_level_max = (1 << color_depth) - 1;
@@ -94,7 +100,7 @@ int ElectrostaticHalftoning2010(struct CMat src,
 		for (int p = 0; p < pixel_count; p++) {
 			image_dst[p] = pixel_level[image_level[p]];
 		}
-		cv_imwrite(".\\output\\0.bmp", *dst);
+		cv_imwrite(".\\output\\0.bmp", dst);
 	}
 
 	/* Process */
@@ -256,11 +262,15 @@ int ElectrostaticHalftoning2010(struct CMat src,
 			}
 			char out_file[50];
 			sprintf(out_file, ".\\output\\%d.bmp", current_iteration);
-			cv_imwrite(out_file, *dst);
+			cv_imwrite(out_file, dst);
 		}
 	}
 
+	cv_imwrite(dst_path, dst);
+
 	free(image_in);
+	free(image_dst);
+	free(image_level);
 	free(image_last);
 	free(particle_Y);
 	free(particle_X);

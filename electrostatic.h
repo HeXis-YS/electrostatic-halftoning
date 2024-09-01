@@ -1,2 +1,1 @@
-#include "cv.hpp"
-int ElectrostaticHalftoning2010(struct CMat, struct CMat *, int, int, int, int, int, int, int);
+int electrostatic_halftoning(const char *, const char *, int, int, int, int, int, int, int);
