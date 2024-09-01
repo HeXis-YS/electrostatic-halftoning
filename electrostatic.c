@@ -50,14 +50,25 @@ int ElectrostaticHalftoning2010(struct CMat src,
 
 	//////////////////////////////////////////////////////////////////////////
 	///// Initialization
+	const int color_depth = 2;
+	const int pix_level_max = (1 << color_depth) - 1;
+	const double particle_charge = 1.0 / (double)pix_level_max;
+	const double particle_charge_2 = 1.0 / (double)(pix_level_max * pix_level_max);
+	printf("%f\n", particle_charge);
+	double pix_level_float[128] = {0.0};
+	unsigned char pix_level_array[128] = {0};
+	for (int i = 1; i <= pix_level_max; i++) {
+		pix_level_float[i] = (double)i / (double)pix_level_max;
+		pix_level_array[i] = (unsigned char)(pix_level_float[i] * 255.0 + 0.5);
+	}
 	int particle_count = 0;
-	memset(image_dst, 255, sizeof(unsigned char) * pixel_count);
+	memset(image_dst, pix_level_max, sizeof(unsigned char) * pixel_count);
 	for (int p = 0; p < pixel_count; p++) {
 		int tmp = 255 - src.data[p];
 		image_in[p] = (double)tmp / 255.0;
 		particle_count += tmp;
 	}
-	particle_count = (particle_count + 127) / 255;
+	particle_count = particle_count * pix_level_max / 255;
 	printf("The number of black pixel(charge) = %d\n", particle_count);
 
 	//////////////////////////////////////////////////////////////////////////
@@ -71,12 +82,15 @@ int ElectrostaticHalftoning2010(struct CMat src,
 		if (enable_initial_charge && rand() % 256 <= src.data[p]) {
 			continue;
 		}
-		image_dst[p] = 0;
+		image_dst[p] = (image_dst[p] > 0) ? (image_dst[p] - 1) : 0;
 		particle_Y[particle] = (double)rand_Y + rand_double();
 		particle_X[particle] = (double)rand_X + rand_double();
 		particle++;
 	}
 	if (enable_debug) {
+		for (int p = 0; p < pixel_count; p++) {
+			image_dst[p] = pix_level_array[image_dst[p]];
+		}
 		cv_imwrite(".\\output\\0.bmp", *dst);
 	}
 
@@ -106,11 +120,10 @@ int ElectrostaticHalftoning2010(struct CMat src,
 		image_last = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
 	}
 	if (enable_debug) {
-		printf("Initial time step = %f\n", time_step);
+		printf("Time step = %f\n", time_step);
 	}
 	for (int current_iteration = 1; current_iteration <= max_iterations; current_iteration++) {
 		printf("Iteration %d\n", current_iteration);
-		memset(image_dst, 255, sizeof(unsigned char) * pixel_count);
 		memcpy(particle_Y_last, particle_Y, sizeof(double) * particle_count);
 		memcpy(particle_X_last, particle_X, sizeof(double) * particle_count);
 		memset(force_Y_array, 0, sizeof(double) * particle_count);
@@ -129,6 +142,7 @@ int ElectrostaticHalftoning2010(struct CMat src,
 		if (enable_early_stop) {
 			memcpy(image_last, image_dst, sizeof(unsigned char) * pixel_count);
 		}
+		memset(image_dst, pix_level_max, sizeof(unsigned char) * pixel_count);
 		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
 			double force_Y = 0.0;
 			double force_X = 0.0;
@@ -150,7 +164,8 @@ int ElectrostaticHalftoning2010(struct CMat src,
 						continue;
 					}
 					tmp = distance_Y_2 + distance_X_2[x];
-					tmp = (tmp <= 0.1) ? (image_in[p] * (20.0 - 100.0 * tmp)) : (image_in[p] / tmp);
+					tmp = (tmp <= 0.1) ? (20.0 - 100.0 * tmp) : (1.0 / tmp);
+					tmp *= image_in[p] * particle_charge;
 					force_Y += distance_Y * tmp;
 					force_X += distance_X[x] * tmp;
 				}
@@ -162,6 +177,7 @@ int ElectrostaticHalftoning2010(struct CMat src,
 				double distance_X = particle_X_last[particle] - particle_X_current;
 				tmp = distance_Y * distance_Y + distance_X * distance_X;
 				tmp = (tmp <= 0.1) ? (20.0 - 100.0 * tmp) : (1.0 / tmp);
+				tmp *= particle_charge_2;
 				double repulsion_force = distance_Y * tmp;
 				force_Y -= repulsion_force;
 				force_Y_array[particle] += repulsion_force;
@@ -215,10 +231,14 @@ int ElectrostaticHalftoning2010(struct CMat src,
 			particle_X[current_particle] = particle_X_current;
 
 			// Output
-			image_dst[(int)particle_Y_current * cols + (int)particle_X_current] = 0;
+			int p = (int)particle_Y_current * cols + (int)particle_X_current;
+			image_dst[p] = (image_dst[p] > 0) ? (image_dst[p] - 1) : 0;
 		}
 		if (enable_debug && shake) {
 			printf("Shake performed (%f)\n", shake_tmp1);
+		}
+		for (int p = 0; p < pixel_count; p++) {
+			image_dst[p] = pix_level_array[image_dst[p]];
 		}
 		if (enable_early_stop) {
 			if (memcmp(image_dst, image_last, sizeof(unsigned char) * pixel_count) == 0) {
