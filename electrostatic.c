@@ -209,22 +209,15 @@ int electrostatic_halftoning(const char *src_path,
 				}
 			}
 
-			force_Y_array[current_particle] += force_Y;
-			force_X_array[current_particle] += force_X;
-		}
-		if (enable_debug) {
-			mean = 0.0;
-			for (int current_particle = 0; current_particle < particle_count; current_particle++) {
-				double force_Y = force_Y_array[current_particle];
-				double force_X = force_X_array[current_particle];
-				mean += sqrt(force_Y * force_Y + force_X * force_X);
-			}
-			mean /= (double)particle_count;
-			printf("Mean force = %f\n", mean);
-		}
-		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
-			double particle_Y_current = particle_Y_last[current_particle] + force_Y_array[current_particle] * time_step;
-			double particle_X_current = particle_X_last[current_particle] + force_X_array[current_particle] * time_step;
+			force_Y += force_Y_array[current_particle];
+			force_X += force_X_array[current_particle];
+
+			// For debug only
+			force_Y_array[current_particle] = force_Y;
+			force_X_array[current_particle] = force_X;
+
+			particle_Y_current = particle_Y_last[current_particle] + force_Y * time_step;
+			particle_X_current = particle_X_last[current_particle] + force_X * time_step;
 
 			// Shake
 			if (shake) {
@@ -240,8 +233,24 @@ int electrostatic_halftoning(const char *src_path,
 			int p = (int)particle_Y_current * cols + (int)particle_X_current;
 			image_level[p] -= (image_level[p] > 0) ? 1 : 0;
 		}
-		if (enable_debug && shake) {
-			printf("Shake performed (%f)\n", shake_tmp1);
+		if (enable_debug) {
+			mean = 0.0;
+			for (int current_particle = 0; current_particle < particle_count; current_particle++) {
+				double force_Y = force_Y_array[current_particle];
+				double force_X = force_X_array[current_particle];
+				mean += sqrt(force_Y * force_Y + force_X * force_X);
+			}
+			mean /= (double)particle_count;
+			printf("Mean force = %f\n", mean);
+			if (shake) {
+				printf("Shake performed (%f)\n", shake_tmp1);
+			}
+			for (int p = 0; p < pixel_count; p++) {
+				image_dst[p] = pixel_level[image_level[p]];
+			}
+			char out_file[50];
+			sprintf(out_file, ".\\output\\%d.bmp", current_iteration);
+			cv_imwrite(out_file, dst);
 		}
 		if (enable_early_stop) {
 			if (memcmp(image_level, image_last, sizeof(unsigned char) * pixel_count) == 0) {
@@ -257,14 +266,6 @@ int electrostatic_halftoning(const char *src_path,
 			} else {
 				early_stop_counter = 0;
 			}
-		}
-		if (enable_debug) {
-			for (int p = 0; p < pixel_count; p++) {
-				image_dst[p] = pixel_level[image_level[p]];
-			}
-			char out_file[50];
-			sprintf(out_file, ".\\output\\%d.bmp", current_iteration);
-			cv_imwrite(out_file, dst);
 		}
 	}
 
