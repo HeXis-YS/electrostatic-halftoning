@@ -156,13 +156,14 @@ int electrostatic_halftoning(const char *src_path,
 			double tmp;
 
 			// Attraction
+			double distance_Y = 0.5 - particle_Y_current;
+			tmp = 0.5 - particle_X_current;
 			for (int x = 0; x < cols; x++) {
-				tmp = x + 0.5 - particle_X_current;
 				distance_X[x] = tmp;
 				distance_X_2[x] = tmp * tmp;
+				tmp += 1.0;
 			}
 			for (int y = 0, p = 0; y < rows; y++) {
-				double distance_Y = y + 0.5 - particle_Y_current;
 				double distance_Y_2 = distance_Y * distance_Y;
 				for (int x = 0; x < cols; x++, p++) {
 					if (unlikely(image_in[p] == 0.0)) {
@@ -175,6 +176,7 @@ int electrostatic_halftoning(const char *src_path,
 					force_Y += distance_Y * tmp;
 					force_X += distance_X[x] * tmp;
 				}
+				distance_Y += 1.0;
 			}
 
 			// Repulsion
