@@ -14,7 +14,7 @@ typedef struct {
 	bool enable_shake;
 	uint8_t early_stop;
 	bool enable_debug;
-} eh_params;
+} eh_options;
 
 struct eh_thread {
     int enable_gridforce;
