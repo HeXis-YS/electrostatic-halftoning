@@ -13,7 +13,7 @@
 #define malloc_uint8(size) (uint8_t *)malloc(sizeof(uint8_t) * size)
 #define zero_double(ptr, size) memset(ptr, 0, sizeof(double) * size)
 
-#define one_or_zero(x) x = x ? 1 : 0;
+#define to_bool(x) x = x ? true : false;
 
 #define pow2(x) (x * x)
 
@@ -21,6 +21,39 @@ struct eh_thread t;
 
 static double rand_double() {
 	return (double)rand() / ((double)RAND_MAX + 1.0);
+}
+
+static void check_params(eh_params *p) {
+	to_bool(p->enable_initial_charge);
+	to_bool(p->enable_gridforce);
+	to_bool(p->enable_shake);
+	to_bool(p->enable_debug);
+	if ((p->enable_shake && p->max_iterations < 64) || p->max_iterations == 0) {
+		printf("Warning: Max iterations %d -> 64.", p->max_iterations);
+		p->max_iterations = 64;
+	}
+	if (p->color_depth == 0) {
+		printf("Warning: Color depth 0 -> 1.\n");
+		p->color_depth = 1;
+	} else if (p->color_depth > 7) {
+		printf("Warning: Color depth %d -> 7.\n", p->color_depth);
+		p->color_depth = 7;
+	}
+}
+
+static void log_params(const eh_params *p) {
+	printf("Source image      = %s\n", p->src_path);
+	printf("Destination image = %s\n", p->dst_path);
+	printf("Color depth       = %d\n", p->color_depth);
+	printf("Max iterations    = %d\n", p->max_iterations);
+	printf("Initial charge    = %s\n", p->enable_initial_charge ? "Enabled" : "Disabled");
+	printf("Grid Force        = %s\n", p->enable_gridforce ? "Enabled" : "Disabled");
+	printf("Shake             = %s\n", p->enable_shake ? "Enabled" : "Disabled");
+	if (p->early_stop) {
+		printf("Early stop        = %d iterations\n", p->early_stop);
+	} else {
+		printf("Early stop        = Disabled\n");
+	}
 }
 
 static void process() {
@@ -135,34 +168,27 @@ static void process() {
 
 int electrostatic_halftoning(const char *src_path,
 							 const char *dst_path,
-							 int color_depth,
-							 int max_iterations,
-							 int enable_initial_charge,
-							 int enable_gridforce,
-							 int enable_shake,
-							 int enable_early_stop,
-							 int enable_debug) {
-	/* Exceptions */
-	max_iterations = (max_iterations > 0) ? max_iterations : 8;
-	one_or_zero(enable_initial_charge);
-	one_or_zero(enable_gridforce);
-	one_or_zero(enable_shake);
-	enable_early_stop = enable_early_stop ? enable_early_stop : 0;
-	one_or_zero(enable_debug);
-	if (color_depth < 1 || color_depth > 7) {
-		printf("Error: Color depth = [1, 7]\n");
-	}
-	printf("Color depth = %d\n", color_depth);
-	printf("Max iterations = %d\n", max_iterations);
-	printf("Initial charge = %s\n", enable_initial_charge ? "Enabled" : "Disabled");
-	printf("Grid Force = %s\n", enable_gridforce ? "Enabled" : "Disabled");
-	printf("Shake = %s\n", enable_shake ? "Enabled" : "Disabled");
-	printf("Early stop = ");
-	enable_early_stop ? printf("%d iterations.\n", enable_early_stop) : printf("Disabled.\n");
-	if (enable_shake && max_iterations <= 64) {
-		printf("Error: max_iterations > 64, when enable_shake = 1\n");
-		return 1;
-	}
+							 uint8_t color_depth,
+							 unsigned int max_iterations,
+							 bool enable_initial_charge,
+							 bool enable_gridforce,
+							 bool enable_shake,
+							 uint8_t early_stop,
+							 bool enable_debug) {
+	eh_params p = {
+		.src_path = src_path,
+		.dst_path = dst_path,
+		.color_depth = color_depth,
+		.max_iterations = max_iterations,
+		.enable_initial_charge = enable_initial_charge,
+		.enable_gridforce = enable_gridforce,
+		.enable_shake = enable_shake,
+		.early_stop = early_stop,
+		.enable_debug = enable_debug,
+	};
+
+	check_params(&p);
+	log_params(&p);
 
 	// Load image
 	struct CMat src;
@@ -174,7 +200,6 @@ int electrostatic_halftoning(const char *src_path,
 	const int pixel_count = rows * cols;
 	double *image_in = malloc_double(pixel_count);
 	uint8_t *image_dst = malloc_uint8(pixel_count);
-	uint8_t *image_level = malloc_uint8(pixel_count);
 	struct CMat dst;
 	dst.rows = rows;
 	dst.cols = cols;
@@ -202,6 +227,7 @@ int electrostatic_halftoning(const char *src_path,
 	/* Particle Initialization */
 	double *particle_Y = malloc_double(particle_count);
 	double *particle_X = malloc_double(particle_count);
+	uint8_t *image_level = malloc_uint8(pixel_count);
 	memset(image_level, pixel_level_max, sizeof(uint8_t) * pixel_count);
 	for (int particle = 0; particle < particle_count;) {
 		int rand_Y = rand() % rows;
@@ -244,7 +270,7 @@ int electrostatic_halftoning(const char *src_path,
 	// Early stop
 	uint8_t *image_last = NULL;
 	int early_stop_counter = 0;
-	if (enable_early_stop) {
+	if (early_stop) {
 		image_last = malloc_uint8(pixel_count);
 	}
 	printf("\n");
@@ -278,7 +304,7 @@ int electrostatic_halftoning(const char *src_path,
 				shake = 0;
 			}
 		}
-		if (enable_early_stop) {
+		if (early_stop) {
 			memcpy(image_last, image_level, sizeof(uint8_t) * pixel_count);
 		}
 		memset(image_level, pixel_level_max, sizeof(uint8_t) * pixel_count);
@@ -302,11 +328,11 @@ int electrostatic_halftoning(const char *src_path,
 			sprintf(out_file, ".\\output\\%d.bmp", current_iteration);
 			cv_imwrite(out_file, dst);
 		}
-		if (enable_early_stop) {
+		if (early_stop) {
 			if (memcmp(image_level, image_last, sizeof(uint8_t) * pixel_count) == 0) {
 				early_stop_counter++;
 				printf("Result unchanged for %d iterations.\n", early_stop_counter);
-				if (early_stop_counter >= enable_early_stop) {
+				if (early_stop_counter >= early_stop) {
 					printf("Early stop.\n");
 					for (int p = 0; p < pixel_count; p++) {
 						image_dst[p] = pixel_level[image_level[p]];

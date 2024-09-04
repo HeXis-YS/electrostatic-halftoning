@@ -4,6 +4,18 @@
 typedef unsigned char bool;
 typedef unsigned char uint8_t;
 
+typedef struct {
+	const char *src_path;
+	const char *dst_path;
+	uint8_t color_depth;
+	unsigned int max_iterations;
+	bool enable_initial_charge;
+	bool enable_gridforce;
+	bool enable_shake;
+	uint8_t early_stop;
+	bool enable_debug;
+} eh_params;
+
 struct eh_thread {
     int enable_gridforce;
     double time_step;
