@@ -1,6 +1,6 @@
 #include "cv.hpp"
+#include "eh_types.h"
 #include <math.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,8 +17,120 @@
 
 #define pow2(x) (x * x)
 
+struct eh_thread t;
+
 static double rand_double() {
 	return (double)rand() / ((double)RAND_MAX + 1.0);
+}
+
+static void process() {
+	const int enable_gridforce = t.enable_gridforce;
+	const double time_step = t.time_step;
+	const double particle_charge_2 = t.particle_charge_2;
+	const int shake = t.shake;
+	const double shake_force = t.shake_force;
+	const int rows = t.rows;
+	const int cols = t.cols;
+	const int particle_count = t.particle_count;
+	const double *image_in = t.image_in;
+	uint8_t *image_level = t.image_level;
+	double *particle_Y = t.particle_Y;
+	double *particle_X = t.particle_X;
+	const double *particle_Y_last = t.particle_Y_last;
+	const double *particle_X_last = t.particle_X_last;
+	double *distance_X = malloc_double(cols);
+	double *distance_X_2 = malloc_double(cols);
+	double *force_Y_array = malloc_double(particle_count);
+	double *force_X_array = malloc_double(particle_count);
+	for (int current_particle = 0; current_particle < particle_count; current_particle++) {
+		double force_Y = 0.0;
+		double force_X = 0.0;
+		double particle_Y_current = particle_Y_last[current_particle];
+		double particle_X_current = particle_X_last[current_particle];
+		double tmp;
+
+		// Attraction
+		tmp = 0.5 - particle_X_current;
+		for (int x = 0; x < cols; x++) {
+			distance_X[x] = tmp;
+			distance_X_2[x] = pow2(tmp);
+			tmp += 1.0;
+		}
+		double distance_Y = 0.5 - particle_Y_current;
+		for (int y = 0, p = 0; y < rows; y++) {
+			double distance_Y_2 = pow2(distance_Y);
+			for (int x = 0; x < cols; x++, p++) {
+				if (unlikely(image_in[p] == 0.0)) {
+					continue;
+				}
+				tmp = distance_Y_2 + distance_X_2[x];
+				tmp = (tmp <= 0.1) ? (20.0 - 100.0 * tmp) : (1.0 / tmp);
+				// image_in[p] * particle_charge is already done in the initialization step
+				tmp *= image_in[p];
+				force_Y += distance_Y * tmp;
+				force_X += distance_X[x] * tmp;
+			}
+			distance_Y += 1.0;
+		}
+
+		// Repulsion
+		for (int particle = current_particle + 1; particle < particle_count; particle++) {
+			distance_Y = particle_Y_last[particle] - particle_Y_current;
+			double distance_X = particle_X_last[particle] - particle_X_current;
+			tmp = pow2(distance_Y) + pow2(distance_X);
+			tmp = (tmp <= 0.1) ? (20.0 - 100.0 * tmp) : (1.0 / tmp);
+			tmp *= particle_charge_2;
+			double repulsion_force = distance_Y * tmp;
+			force_Y -= repulsion_force;
+			force_Y_array[particle] += repulsion_force;
+			repulsion_force = distance_X * tmp;
+			force_X -= repulsion_force;
+			force_X_array[particle] += repulsion_force;
+		}
+
+		// Add GridForce to find discrete particle locations
+		if (enable_gridforce) {
+			double grid_distance_Y = particle_Y_current - (int)particle_Y_current;
+			double grid_distance_X = particle_X_current - (int)particle_X_current;
+			grid_distance_Y = possibility(grid_distance_Y <= 0.5, 0.5) ? -grid_distance_Y : 1 - grid_distance_Y;
+			grid_distance_X = possibility(grid_distance_X <= 0.5, 0.5) ? -grid_distance_X : 1 - grid_distance_X;
+			tmp = pow2(grid_distance_Y) + pow2(grid_distance_X);
+			if (likely(tmp != 0.0)) {
+				tmp = sqrt(tmp);
+				tmp = 3.5 / (tmp + 10000.0 * pow(tmp, 9.0));
+				force_Y += grid_distance_Y * tmp;
+				force_X += grid_distance_X * tmp;
+			}
+		}
+
+		force_Y += force_Y_array[current_particle];
+		force_X += force_X_array[current_particle];
+
+		// For debug only
+		force_Y_array[current_particle] = force_Y;
+		force_X_array[current_particle] = force_X;
+
+		particle_Y_current = particle_Y_last[current_particle] + force_Y * time_step;
+		particle_X_current = particle_X_last[current_particle] + force_X * time_step;
+
+		// Shake
+		if (shake) {
+			particle_Y_current += shake_force;
+			particle_X_current += shake_force;
+		}
+
+		// Result (new position of particles)
+		particle_Y[current_particle] = particle_Y_current - floor(particle_Y_current / (double)rows) * (double)rows;
+		particle_X[current_particle] = particle_X_current - floor(particle_X_current / (double)cols) * (double)cols;
+
+		// Output
+		int p = (int)particle_Y_current * cols + (int)particle_X_current;
+		image_level[p] -= (image_level[p] > 0) ? 1 : 0;
+	}
+	free(distance_X);
+	free(distance_X_2);
+	free(force_Y_array);
+	free(force_X_array);
 }
 
 int electrostatic_halftoning(const char *src_path,
@@ -114,14 +226,12 @@ int electrostatic_halftoning(const char *src_path,
 	/* Process */
 	double *particle_Y_last = malloc_double(particle_count);
 	double *particle_X_last = malloc_double(particle_count);
-	double *distance_X = malloc_double(cols);
-	double *distance_X_2 = malloc_double(cols);
 	double *force_Y_array = malloc_double(particle_count);
 	double *force_X_array = malloc_double(particle_count);
 	// Shake
 	int shake = 0;
 	double shake_tmp;
-	double shake_tmp1;
+	double shake_force;
 	if (enable_shake) {
 		shake_tmp = log10((double)max_iterations) / log10(1024.0) - 0.6;
 	}
@@ -138,6 +248,22 @@ int electrostatic_halftoning(const char *src_path,
 		image_last = malloc_uint8(pixel_count);
 	}
 	printf("\n");
+
+	t.enable_gridforce = enable_gridforce;
+	t.time_step = time_step;
+	t.particle_charge_2 = particle_charge_2;
+	t.shake = shake;
+	t.shake_force = shake_force;
+	t.rows = rows;
+	t.cols = cols;
+	t.particle_count = particle_count;
+	t.image_in = image_in;
+	t.image_level = image_level;
+	t.particle_Y = particle_Y;
+	t.particle_X = particle_X;
+	t.particle_Y_last = particle_Y_last;
+	t.particle_X_last = particle_X_last;
+
 	for (int current_iteration = 1; current_iteration <= max_iterations; current_iteration++) {
 		printf("Iteration %d\n", current_iteration);
 		memcpy(particle_Y_last, particle_Y, sizeof(double) * particle_count);
@@ -146,7 +272,7 @@ int electrostatic_halftoning(const char *src_path,
 		zero_double(force_X_array, particle_count);
 		if (enable_shake) {
 			if (possibility(current_iteration % 10 == 0, 0.1)) {
-				shake_tmp1 = shake_tmp * exp(current_iteration / 1000.0);
+				shake_force = shake_tmp * exp(current_iteration / 1000.0);
 				shake = 1;
 			} else {
 				shake = 0;
@@ -156,91 +282,7 @@ int electrostatic_halftoning(const char *src_path,
 			memcpy(image_last, image_level, sizeof(uint8_t) * pixel_count);
 		}
 		memset(image_level, pixel_level_max, sizeof(uint8_t) * pixel_count);
-		for (int current_particle = 0; current_particle < particle_count; current_particle++) {
-			double force_Y = 0.0;
-			double force_X = 0.0;
-			double particle_Y_current = particle_Y_last[current_particle];
-			double particle_X_current = particle_X_last[current_particle];
-			double tmp;
-
-			// Attraction
-			double distance_Y = 0.5 - particle_Y_current;
-			tmp = 0.5 - particle_X_current;
-			for (int x = 0; x < cols; x++) {
-				distance_X[x] = tmp;
-				distance_X_2[x] = pow2(tmp);
-				tmp += 1.0;
-			}
-			for (int y = 0, p = 0; y < rows; y++) {
-				double distance_Y_2 = pow2(distance_Y);
-				for (int x = 0; x < cols; x++, p++) {
-					if (unlikely(image_in[p] == 0.0)) {
-						continue;
-					}
-					tmp = distance_Y_2 + distance_X_2[x];
-					tmp = (tmp <= 0.1) ? (20.0 - 100.0 * tmp) : (1.0 / tmp);
-					// image_in[p] * particle_charge is already done in the initialization step
-					tmp *= image_in[p];
-					force_Y += distance_Y * tmp;
-					force_X += distance_X[x] * tmp;
-				}
-				distance_Y += 1.0;
-			}
-
-			// Repulsion
-			for (int particle = current_particle + 1; particle < particle_count; particle++) {
-				double distance_Y = particle_Y_last[particle] - particle_Y_current;
-				double distance_X = particle_X_last[particle] - particle_X_current;
-				tmp = pow2(distance_Y) + pow2(distance_X);
-				tmp = (tmp <= 0.1) ? (20.0 - 100.0 * tmp) : (1.0 / tmp);
-				tmp *= particle_charge_2;
-				double repulsion_force = distance_Y * tmp;
-				force_Y -= repulsion_force;
-				force_Y_array[particle] += repulsion_force;
-				repulsion_force = distance_X * tmp;
-				force_X -= repulsion_force;
-				force_X_array[particle] += repulsion_force;
-			}
-
-			// Add GridForce to find discrete particle locations
-			if (enable_gridforce) {
-				double grid_distance_Y = particle_Y_current - (int)particle_Y_current;
-				double grid_distance_X = particle_X_current - (int)particle_X_current;
-				grid_distance_Y = possibility(grid_distance_Y <= 0.5, 0.5) ? -grid_distance_Y : 1 - grid_distance_Y;
-				grid_distance_X = possibility(grid_distance_X <= 0.5, 0.5) ? -grid_distance_X : 1 - grid_distance_X;
-				tmp = pow2(grid_distance_Y) + pow2(grid_distance_X);
-				if (likely(tmp != 0.0)) {
-					tmp = sqrt(tmp);
-					tmp = 3.5 / (tmp + 10000.0 * pow(tmp, 9.0));
-					force_Y += grid_distance_Y * tmp;
-					force_X += grid_distance_X * tmp;
-				}
-			}
-
-			force_Y += force_Y_array[current_particle];
-			force_X += force_X_array[current_particle];
-
-			// For debug only
-			force_Y_array[current_particle] = force_Y;
-			force_X_array[current_particle] = force_X;
-
-			particle_Y_current = particle_Y_last[current_particle] + force_Y * time_step;
-			particle_X_current = particle_X_last[current_particle] + force_X * time_step;
-
-			// Shake
-			if (shake) {
-				particle_Y_current += shake_tmp1;
-				particle_X_current += shake_tmp1;
-			}
-
-			// Result (new position of particles)
-			particle_Y[current_particle] = particle_Y_current - floor(particle_Y_current / (double)rows) * (double)rows;
-			particle_X[current_particle] = particle_X_current - floor(particle_X_current / (double)cols) * (double)cols;
-
-			// Output
-			int p = (int)particle_Y_current * cols + (int)particle_X_current;
-			image_level[p] -= (image_level[p] > 0) ? 1 : 0;
-		}
+		process();
 		if (enable_debug) {
 			mean = 0.0;
 			for (int current_particle = 0; current_particle < particle_count; current_particle++) {
@@ -251,7 +293,7 @@ int electrostatic_halftoning(const char *src_path,
 			mean /= (double)particle_count;
 			printf("Mean force = %f\n", mean);
 			if (shake) {
-				printf("Shake performed (%f)\n", shake_tmp1);
+				printf("Shake performed (%f)\n", shake_force);
 			}
 			for (int p = 0; p < pixel_count; p++) {
 				image_dst[p] = pixel_level[image_level[p]];
@@ -289,8 +331,6 @@ int electrostatic_halftoning(const char *src_path,
 	free(force_X_array);
 	free(particle_Y_last);
 	free(particle_X_last);
-	free(distance_X);
-	free(distance_X_2);
 
 	return 0;
 }
