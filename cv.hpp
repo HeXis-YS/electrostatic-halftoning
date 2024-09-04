@@ -1,14 +1,15 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-struct CMat {
+typedef struct {
 	unsigned char *data;
-	int rows;
-	int cols;
-};
-int cv_imread(const char *, struct CMat *);
-int cv_imwrite(const char *, struct CMat);
-void cv_imshow(const char *label, struct CMat);
+	unsigned int rows;
+	unsigned int cols;
+	unsigned char inverse;
+} CMat;
+int cv_imread(const char *, CMat *);
+int cv_imwrite(const char *, const CMat *);
+void cv_imshow(const char *label, const CMat *);
 int cv_waitKey(int);
 #ifdef __cplusplus
 }

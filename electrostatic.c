@@ -191,7 +191,7 @@ int electrostatic_halftoning(const char *src_path,
 	log_params(&opt);
 
 	// Load image
-	struct CMat src;
+	CMat src;
 	if (cv_imread(src_path, &src) == 0) {
 		return 2;
 	}
@@ -199,10 +199,8 @@ int electrostatic_halftoning(const char *src_path,
 	const int cols = src.cols;
 	const int pixel_count = rows * cols;
 	uint8_t *image_dst = malloc_uint8(pixel_count);
-	struct CMat dst = {
-		.rows = rows,
-		.cols = cols,
-		.data = image_dst};
+	CMat dst = src;
+	dst.data = image_dst;
 
 	/* Color Depth */
 	const int pixel_level_max = (1 << color_depth) - 1;
@@ -246,7 +244,7 @@ int electrostatic_halftoning(const char *src_path,
 		for (int p = 0; p < pixel_count; p++) {
 			image_dst[p] = pixel_level[image_level[p]];
 		}
-		cv_imwrite(".\\output\\0.bmp", dst);
+		cv_imwrite(".\\output\\0.bmp", &dst);
 	}
 
 	/* Process */
@@ -326,7 +324,7 @@ int electrostatic_halftoning(const char *src_path,
 			}
 			char out_file[50];
 			sprintf(out_file, ".\\output\\%d.bmp", current_iteration);
-			cv_imwrite(out_file, dst);
+			cv_imwrite(out_file, &dst);
 		}
 		if (early_stop) {
 			if (memcmp(image_level, image_last, sizeof(uint8_t) * pixel_count) == 0) {
@@ -345,7 +343,7 @@ int electrostatic_halftoning(const char *src_path,
 		}
 	}
 
-	cv_imwrite(dst_path, dst);
+	cv_imwrite(dst_path, &dst);
 
 	free(image_in);
 	free(image_dst);

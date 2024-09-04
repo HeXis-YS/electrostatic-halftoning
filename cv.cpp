@@ -4,47 +4,58 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
-using namespace cv;
-// using namespace std;
+typedef unsigned char uint8_t;
+typedef unsigned int uint_t;
 
-int cv_imread(const char *path, struct CMat *csrc) {
-	cv::Mat src;
-	src = cv::imread(path, cv::ImreadModes::IMREAD_GRAYSCALE);
+using namespace cv;
+
+static void copy_data(uint8_t *dst, const uint8_t *src, uint_t size, uint8_t inverse) {
+	if (inverse) {
+		for (int i = 0; i < size; i++) {
+			dst[i] = ~src[i];
+		}
+	} else {
+		memcpy(dst, src, sizeof(uint8_t) * size);
+	}
+}
+
+int cv_imread(const char *path, CMat *csrc) {
+	Mat src = imread(path, ImreadModes::IMREAD_GRAYSCALE);
 	if (!src.empty()) {
-		int pixel_count = src.rows * src.cols;
-		csrc->data = (unsigned char *)malloc(sizeof(unsigned char) * pixel_count);
+		const uint_t pixel_count = src.rows * src.cols;
+		uint_t strength = 0;
+		csrc->data = (uint8_t *)malloc(sizeof(uint8_t) * pixel_count);
 		csrc->cols = src.cols;
 		csrc->rows = src.rows;
 		for (int i = 0; i < pixel_count; i++) {
-			csrc->data[i] = src.data[i];
+			strength += src.data[i];
 		}
+		if (strength <= (pixel_count * 255) / 2) {
+			csrc->inverse = 1;
+		} else {
+			csrc->inverse = 0;
+		}
+		copy_data(csrc->data, src.data, pixel_count, csrc->inverse);
 		return 1;
 	}
 	return 0;
 }
 
-int cv_imwrite(const char *path, struct CMat dst) {
-	// cv::Mat dst;
-	Mat real_dst(dst.rows, dst.cols, CV_8UC1);
-	int pixel_count = dst.rows * dst.cols;
-	for (int i = 0; i < pixel_count; i++) {
-		real_dst.data[i] = dst.data[i];
-	}
-	if (cv::imwrite(path, real_dst)) {
+int cv_imwrite(const char *path, const CMat *cdst) {
+	Mat dst(cdst->rows, cdst->cols, CV_8UC1);
+	copy_data(dst.data, cdst->data, cdst->rows * cdst->cols, cdst->inverse);
+	if (imwrite(path, dst)) {
 		return 1;
 	}
 	return 0;
 }
 
-void cv_imshow(const char *label, struct CMat dst) {
-	Mat real_dst(dst.rows, dst.cols, CV_8UC1);
-	int pixel_count = dst.rows * dst.cols;
-	for (int i = 0; i < pixel_count; i++) {
-		real_dst.data[i] = dst.data[i];
-	}
-	cv::imshow(label, real_dst);
+void cv_imshow(const char *label, const CMat *cdst) {
+	Mat dst(cdst->rows, cdst->cols, CV_8UC1);
+	copy_data(dst.data, cdst->data, cdst->rows * cdst->cols, cdst->inverse);
+	imshow(label, dst);
 }
 
 int cv_waitKey(int delay) {
-	return cv::waitKey(delay);
+	return waitKey(delay);
 }
